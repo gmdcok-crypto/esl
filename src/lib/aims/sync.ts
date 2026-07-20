@@ -1,32 +1,25 @@
-import { z } from "zod";
 import { getAimsClient } from "@/lib/aims/client";
+import { meetingDisplaySchema, toAimsMeetingArticle } from "@/lib/aims/meeting";
 import { isAimsConfigured } from "@/lib/config";
 
-const updateProductSchema = z.object({
-  sku: z.string().min(1),
-  name: z.string().optional(),
-  price: z.number().nonnegative(),
-  currency: z.string().default("KRW"),
-  unit: z.string().optional(),
-  barcode: z.string().optional(),
-  promotionPrice: z.number().nonnegative().optional(),
-  stock: z.number().int().optional(),
-});
-
-export async function syncProductFromPos(input: unknown) {
+function assertAimsConfigured() {
   if (!isAimsConfigured()) {
     throw new Error("AIMS is not configured. Set AIMS_BASE_URL, AIMS_USERNAME, and AIMS_PASSWORD.");
   }
-
-  const payload = updateProductSchema.parse(input);
-  const aims = getAimsClient();
-  return aims.upsertProduct(payload);
 }
 
-export async function syncProductsFromPos(items: unknown[]) {
+export async function syncMeetingDisplay(input: unknown) {
+  assertAimsConfigured();
+  const meeting = meetingDisplaySchema.parse(input);
+  const payload = toAimsMeetingArticle(meeting);
+  const aims = getAimsClient();
+  return aims.upsertMeetingArticle(payload);
+}
+
+export async function syncMeetingDisplays(items: unknown[]) {
   const results = [];
   for (const item of items) {
-    results.push(await syncProductFromPos(item));
+    results.push(await syncMeetingDisplay(item));
   }
   return results;
 }

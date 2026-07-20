@@ -9,6 +9,7 @@ import type {
   AssignLabelPayload,
   UpdateProductPayload,
 } from "./types";
+import type { AimsMeetingArticlePayload } from "./meeting";
 
 export class AimsClientError extends Error {
   constructor(
@@ -156,6 +157,13 @@ export class AimsClient {
 
   async updateProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
     return this.request<AimsProduct>("/common/articles", {
+      method: "PUT",
+      body: payload,
+    });
+  }
+
+  async upsertMeetingArticle(payload: AimsMeetingArticlePayload): Promise<unknown> {
+    return this.request("/common/articles", {
       method: "PUT",
       body: payload,
     });
