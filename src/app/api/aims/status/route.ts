@@ -16,8 +16,8 @@ export async function GET() {
 
     try {
       const aims = getAimsClient();
-      const store = await aims.getStore();
-      return NextResponse.json({ configured: true, authenticated: true, store });
+      const stores = await aims.listStores();
+      return NextResponse.json({ configured: true, authenticated: true, stores, count: stores.length });
     } catch (error) {
       if (error instanceof AimsClientError) {
         return NextResponse.json({

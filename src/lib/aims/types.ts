@@ -31,8 +31,10 @@ export interface AimsStore {
 }
 
 export interface AimsApiError {
-  code: string;
-  message: string;
+  responseCode?: string | number;
+  responseMessage?: string | unknown;
+  code?: string;
+  message?: string;
   details?: unknown;
 }
 

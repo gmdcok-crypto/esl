@@ -21,6 +21,27 @@ export class AimsClientError extends Error {
   }
 }
 
+type AimsEnvelope<T> = {
+  responseCode?: string | number;
+  responseMessage?: T;
+};
+
+function unwrapAimsResponse<T>(payload: unknown): T {
+  if (payload && typeof payload === "object" && "responseMessage" in payload) {
+    const envelope = payload as AimsEnvelope<T>;
+    if (envelope.responseMessage !== undefined) {
+      return envelope.responseMessage;
+    }
+  }
+  return payload as T;
+}
+
+function getApiErrorMessage(payload: AimsApiError | undefined, fallback: string): string {
+  if (!payload) return fallback;
+  if (typeof payload.responseMessage === "string") return payload.responseMessage;
+  if (typeof payload.message === "string") return payload.message;
+  return fallback;
+}
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
@@ -92,17 +113,26 @@ export class AimsClient {
 
     if (!response.ok) {
       throw new AimsClientError(
-        `AIMS API request failed: ${response.status} ${response.statusText}`,
+        getApiErrorMessage(payload as AimsApiError | undefined, `AIMS API request failed: ${response.status} ${response.statusText}`),
         response.status,
         payload as AimsApiError | undefined,
       );
     }
 
-    return payload as T;
+    return unwrapAimsResponse<T>(payload);
   }
 
-  async getStore(): Promise<AimsStore> {
-    return this.request<AimsStore>("/stores");
+  async listStores(): Promise<AimsStore[]> {
+    const stores = await this.request<AimsStore[] | { stores?: AimsStore[] }>("/common/store");
+    if (Array.isArray(stores)) {
+      return stores;
+    }
+    return stores.stores ?? [];
+  }
+
+  async getStore(): Promise<AimsStore | null> {
+    const stores = await this.listStores();
+    return stores[0] ?? null;
   }
 
   async listProducts(page = 1, pageSize = 50): Promise<AimsListResponse<AimsProduct>> {
