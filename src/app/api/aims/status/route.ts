@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AimsAuthError, getAimsAccessToken } from "@/lib/aims/auth";
 import { getAimsClient, AimsClientError } from "@/lib/aims/client";
-import { isAimsConfigured } from "@/lib/config";
+import { getEnv, isAimsConfigured } from "@/lib/config";
 
 export async function GET() {
   if (!isAimsConfigured()) {
@@ -13,6 +13,16 @@ export async function GET() {
 
   try {
     await getAimsAccessToken();
+    const env = getEnv();
+
+    if (env.AIMS_STORE_ID) {
+      return NextResponse.json({
+        configured: true,
+        authenticated: true,
+        storeId: env.AIMS_STORE_ID,
+        message: "AIMS token issued. Store ID is configured.",
+      });
+    }
 
     try {
       const aims = getAimsClient();

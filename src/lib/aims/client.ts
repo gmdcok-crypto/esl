@@ -136,20 +136,33 @@ export class AimsClient {
   }
 
   async listProducts(page = 1, pageSize = 50): Promise<AimsListResponse<AimsProduct>> {
-    return this.request<AimsListResponse<AimsProduct>>("/articles", {
+    return this.request<AimsListResponse<AimsProduct>>("/common/articles", {
       query: { page, pageSize },
     });
   }
 
-  async getProduct(productId: string): Promise<AimsProduct> {
-    return this.request<AimsProduct>(`/articles/${productId}`);
+  async getProduct(articleId: string): Promise<AimsProduct> {
+    return this.request<AimsProduct>("/common/articles/id", {
+      query: { id: articleId },
+    });
   }
 
-  async upsertProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
-    return this.request<AimsProduct>("/articles", {
+  async createProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
+    return this.request<AimsProduct>("/common/articles", {
+      method: "POST",
+      body: payload,
+    });
+  }
+
+  async updateProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
+    return this.request<AimsProduct>("/common/articles", {
       method: "PUT",
       body: payload,
     });
+  }
+
+  async upsertProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
+    return this.updateProduct(payload);
   }
 
   async listLabels(page = 1, pageSize = 50): Promise<AimsListResponse<AimsLabel>> {
