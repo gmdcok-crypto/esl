@@ -132,7 +132,12 @@ async function loginWithCredentials(): Promise<CachedToken> {
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<CachedToken> {
-  return postTokenRequest("/token/refresh", { refreshToken });
+  const env = getEnv();
+  const body: Record<string, string> = { refreshToken };
+  if (env.AIMS_COMPANY_CODE) {
+    body.companyCode = env.AIMS_COMPANY_CODE;
+  }
+  return postTokenRequest("/token/refresh", body);
 }
 
 async function acquireToken(force = false): Promise<string> {

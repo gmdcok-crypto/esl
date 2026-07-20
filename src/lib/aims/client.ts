@@ -144,16 +144,24 @@ export class AimsClient {
     return stores[0] ?? null;
   }
 
+  private articleQuery(page?: number, pageSize?: number): Record<string, string | number | undefined> {
+    return {
+      ...(this.storeId ? { stationCode: this.storeId, storeId: this.storeId } : {}),
+      ...(page !== undefined ? { page } : {}),
+      ...(pageSize !== undefined ? { pageSize } : {}),
+    };
+  }
+
   async listProducts(page = 1, pageSize = 50): Promise<AimsListResponse<AimsProduct>> {
     return this.request<AimsListResponse<AimsProduct>>("/common/articles", {
-      query: { page, pageSize },
+      query: this.articleQuery(page, pageSize),
       skipStoreQuery: true,
     });
   }
 
   async getProduct(articleId: string): Promise<AimsProduct> {
     return this.request<AimsProduct>("/common/articles/id", {
-      query: { id: articleId },
+      query: { ...this.articleQuery(), id: articleId },
       skipStoreQuery: true,
     });
   }

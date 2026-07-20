@@ -28,14 +28,20 @@ export async function GET() {
         });
       } catch (error) {
         if (error instanceof AimsClientError) {
+          const hint =
+            error.status === 401
+              ? "Token login succeeded, but Articles API returned 401. Set AIMS_COMPANY_CODE in Railway (JWT CustomerCode, e.g. BLU), redeploy, then test GET /common/articles in ESL API Explorer with the same account. If Swagger also returns 401, ask SoluM to enable Articles API access."
+              : undefined;
           return NextResponse.json({
             configured: true,
             authenticated: true,
             storeId: env.AIMS_STORE_ID,
+            companyCodeConfigured: Boolean(env.AIMS_COMPANY_CODE),
             articlesApi: "failed",
             message: "AIMS token issued, but Articles API call failed.",
             error: error.message,
             details: error.body,
+            ...(hint ? { hint } : {}),
           });
         }
         throw error;
