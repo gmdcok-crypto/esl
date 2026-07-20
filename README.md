@@ -38,11 +38,18 @@ curl -X POST https://your-app.railway.app/api/webhooks/pos \
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `AIMS_BASE_URL` | O | AIMS SaaS API URL (SoluM에서 발급) |
-| `AIMS_API_KEY` | O | API 인증 키 |
+| `AIMS_BASE_URL` | O | `https://asia.common.solumesl.com` (아시아 리전) |
+| `AIMS_API_KEY` | O | AIMS Access Token ([토큰 발급](https://asia.common.solumesl.com/common/token/)) |
 | `AIMS_STORE_ID` | | 매장 ID |
 | `AIMS_TENANT_ID` | | 테넌트 ID |
 | `WEBHOOK_SECRET` | | POS webhook 인증 시크릿 |
+
+### AIMS 인증 방법
+
+1. AIMS SaaS 대시보드: https://asia.common.solumesl.com/
+2. 토큰 발급: https://asia.common.solumesl.com/common/token/
+3. Azure AD B2C에 등록된 이메일/비밀번호로 Access Token 발급
+4. 발급받은 토큰을 Railway의 `AIMS_API_KEY`에 설정
 
 > AIMS API 엔드포인트(`/api/v1/...`)는 SoluM에서 제공하는 실제 API 문서에 맞게 `src/lib/aims/client.ts`에서 조정해야 합니다.
 
@@ -58,7 +65,9 @@ npm run dev
 
 1. [Railway](https://railway.app)에서 **New Project → Deploy from GitHub repo** 선택
 2. `gmdcok-crypto/esl` 레포지토리 연결
-3. 환경 변수 설정 (`AIMS_BASE_URL`, `AIMS_API_KEY` 등)
+3. 환경 변수 설정:
+   - `AIMS_BASE_URL` = `https://asia.common.solumesl.com`
+   - `AIMS_API_KEY` = [토큰 발급 페이지](https://asia.common.solumesl.com/common/token/)에서 발급
 4. 배포 후 `GET /api/health`로 상태 확인
 
 `railway.toml`에 빌드/헬스체크 설정이 포함되어 있습니다.
