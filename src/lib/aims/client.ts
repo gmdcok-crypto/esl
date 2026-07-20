@@ -73,7 +73,17 @@ export class AimsClient {
     });
 
     const text = await response.text();
-    const payload = text ? (JSON.parse(text) as unknown) : null;
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text) as unknown;
+      } catch {
+        throw new AimsClientError(
+          `AIMS API returned non-JSON response: ${response.status}`,
+          response.status,
+        );
+      }
+    }
 
     if (response.status === 401 && retryOnUnauthorized) {
       invalidateAimsAccessToken();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AimsAuthError } from "@/lib/aims/auth";
+import { AimsAuthError, getAimsAccessToken } from "@/lib/aims/auth";
 import { getAimsClient, AimsClientError } from "@/lib/aims/client";
 import { isAimsConfigured } from "@/lib/config";
 
@@ -12,9 +12,24 @@ export async function GET() {
   }
 
   try {
-    const aims = getAimsClient();
-    const store = await aims.getStore();
-    return NextResponse.json({ configured: true, authenticated: true, store });
+    await getAimsAccessToken();
+
+    try {
+      const aims = getAimsClient();
+      const store = await aims.getStore();
+      return NextResponse.json({ configured: true, authenticated: true, store });
+    } catch (error) {
+      if (error instanceof AimsClientError) {
+        return NextResponse.json({
+          configured: true,
+          authenticated: true,
+          message: "Token issued successfully, but store lookup failed",
+          error: error.message,
+          details: error.body,
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof AimsAuthError) {
       return NextResponse.json(
@@ -22,10 +37,10 @@ export async function GET() {
         { status: error.status },
       );
     }
-    if (error instanceof AimsClientError) {
+    if (error instanceof Error) {
       return NextResponse.json(
-        { configured: true, authenticated: true, error: error.message, details: error.body },
-        { status: error.status },
+        { configured: true, authenticated: false, error: error.message },
+        { status: 500 },
       );
     }
     throw error;
