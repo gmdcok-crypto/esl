@@ -18,8 +18,21 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+function trimEnv(value: string | undefined): string | undefined {
+  return value?.trim();
+}
+
 function loadEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse({
+    AIMS_BASE_URL: trimEnv(process.env.AIMS_BASE_URL),
+    AIMS_USERNAME: trimEnv(process.env.AIMS_USERNAME),
+    AIMS_PASSWORD: trimEnv(process.env.AIMS_PASSWORD),
+    AIMS_API_BASE_URL: trimEnv(process.env.AIMS_API_BASE_URL),
+    AIMS_STORE_ID: trimEnv(process.env.AIMS_STORE_ID),
+    AIMS_TENANT_ID: trimEnv(process.env.AIMS_TENANT_ID),
+    WEBHOOK_SECRET: trimEnv(process.env.WEBHOOK_SECRET),
+    NODE_ENV: process.env.NODE_ENV,
+  });
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`Missing or invalid environment variables: ${missing}`);
@@ -43,8 +56,8 @@ export function getAimsApiBaseUrl(): string {
 
 export function isAimsConfigured(): boolean {
   return Boolean(
-    process.env.AIMS_BASE_URL &&
-      process.env.AIMS_USERNAME &&
-      process.env.AIMS_PASSWORD,
+    process.env.AIMS_BASE_URL?.trim() &&
+      process.env.AIMS_USERNAME?.trim() &&
+      process.env.AIMS_PASSWORD?.trim(),
   );
 }
