@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  AIMS_BASE_URL: z.string().url(),
+  AIMS_BASE_URL: z
+    .string()
+    .url()
+    .refine((value) => /^https:\/\//.test(value) && !value.includes("\\"), {
+      message: "AIMS_BASE_URL must be an https URL without Windows path prefixes",
+    }),
   AIMS_USERNAME: z.string().min(1),
   AIMS_PASSWORD: z.string().min(1),
   AIMS_API_BASE_URL: z.string().url().optional(),
