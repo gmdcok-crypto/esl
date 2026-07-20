@@ -12,10 +12,10 @@ export const meetingDisplaySchema = z.object({
 export type MeetingDisplayInput = z.infer<typeof meetingDisplaySchema>;
 
 export type AimsMeetingArticlePayload = {
+  stationCode?: string;
   dataList: Array<{
     id: string;
     name: string;
-    stationCode?: string;
     data: Record<string, string>;
   }>;
 };
@@ -46,11 +46,11 @@ export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArt
   }
 
   return {
+    ...(env.AIMS_STORE_ID ? { stationCode: env.AIMS_STORE_ID } : {}),
     dataList: [
       {
         id: input.roomId,
         name: input.meetingName,
-        ...(env.AIMS_STORE_ID ? { stationCode: env.AIMS_STORE_ID } : {}),
         data,
       },
     ],

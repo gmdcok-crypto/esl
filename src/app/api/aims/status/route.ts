@@ -16,12 +16,30 @@ export async function GET() {
     const env = getEnv();
 
     if (env.AIMS_STORE_ID) {
-      return NextResponse.json({
-        configured: true,
-        authenticated: true,
-        storeId: env.AIMS_STORE_ID,
-        message: "AIMS token issued. Store ID is configured.",
-      });
+      try {
+        const aims = getAimsClient();
+        await aims.listProducts(1, 1);
+        return NextResponse.json({
+          configured: true,
+          authenticated: true,
+          storeId: env.AIMS_STORE_ID,
+          articlesApi: "ok",
+          message: "AIMS token issued and Articles API is reachable.",
+        });
+      } catch (error) {
+        if (error instanceof AimsClientError) {
+          return NextResponse.json({
+            configured: true,
+            authenticated: true,
+            storeId: env.AIMS_STORE_ID,
+            articlesApi: "failed",
+            message: "AIMS token issued, but Articles API call failed.",
+            error: error.message,
+            details: error.body,
+          });
+        }
+        throw error;
+      }
     }
 
     try {

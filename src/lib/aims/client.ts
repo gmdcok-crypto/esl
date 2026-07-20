@@ -48,25 +48,32 @@ type RequestOptions = {
   body?: unknown;
   query?: Record<string, string | number | undefined>;
   retryOnUnauthorized?: boolean;
+  /** Articles API uses stationCode in body instead of storeId query. */
+  skipStoreQuery?: boolean;
 };
 
 export class AimsClient {
   private readonly apiBaseUrl: string;
   private readonly storeId?: string;
   private readonly tenantId?: string;
+  private readonly companyCode?: string;
 
   constructor() {
     const env = getEnv();
     this.apiBaseUrl = getAimsApiBaseUrl();
     this.storeId = env.AIMS_STORE_ID;
     this.tenantId = env.AIMS_TENANT_ID;
+    this.companyCode = env.AIMS_COMPANY_CODE;
   }
 
-  private buildUrl(path: string, query?: RequestOptions["query"]): string {
+  private buildUrl(path: string, query?: RequestOptions["query"], skipStoreQuery = false): string {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
     const url = new URL(`${this.apiBaseUrl}${normalizedPath}`);
-    if (this.storeId) {
+    if (this.storeId && !skipStoreQuery) {
       url.searchParams.set("storeId", this.storeId);
+    }
+    if (this.companyCode) {
+      url.searchParams.set("companyCode", this.companyCode);
     }
     if (query) {
       for (const [key, value] of Object.entries(query)) {
@@ -79,16 +86,17 @@ export class AimsClient {
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { method = "GET", body, query, retryOnUnauthorized = true } = options;
+    const { method = "GET", body, query, retryOnUnauthorized = true, skipStoreQuery = false } = options;
     const accessToken = await getAimsAccessToken();
 
-    const response = await fetch(this.buildUrl(path, query), {
+    const response = await fetch(this.buildUrl(path, query, skipStoreQuery), {
       method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
         ...(this.tenantId ? { "X-Tenant-Id": this.tenantId } : {}),
+        ...(this.companyCode ? { "Company-Code": this.companyCode } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
@@ -139,12 +147,14 @@ export class AimsClient {
   async listProducts(page = 1, pageSize = 50): Promise<AimsListResponse<AimsProduct>> {
     return this.request<AimsListResponse<AimsProduct>>("/common/articles", {
       query: { page, pageSize },
+      skipStoreQuery: true,
     });
   }
 
   async getProduct(articleId: string): Promise<AimsProduct> {
     return this.request<AimsProduct>("/common/articles/id", {
       query: { id: articleId },
+      skipStoreQuery: true,
     });
   }
 
@@ -152,6 +162,7 @@ export class AimsClient {
     return this.request<AimsProduct>("/common/articles", {
       method: "POST",
       body: payload,
+      skipStoreQuery: true,
     });
   }
 
@@ -159,14 +170,27 @@ export class AimsClient {
     return this.request<AimsProduct>("/common/articles", {
       method: "PUT",
       body: payload,
+      skipStoreQuery: true,
     });
   }
 
   async upsertMeetingArticle(payload: AimsMeetingArticlePayload): Promise<unknown> {
-    return this.request("/common/articles", {
-      method: "PUT",
-      body: payload,
-    });
+    try {
+      return await this.request("/common/articles", {
+        method: "PUT",
+        body: payload,
+        skipStoreQuery: true,
+      });
+    } catch (error) {
+      if (error instanceof AimsClientError && (error.status === 404 || error.status === 400)) {
+        return this.request("/common/articles", {
+          method: "POST",
+          body: payload,
+          skipStoreQuery: true,
+        });
+      }
+      throw error;
+    }
   }
 
   async upsertProduct(payload: UpdateProductPayload): Promise<AimsProduct> {
