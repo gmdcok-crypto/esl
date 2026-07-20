@@ -14,13 +14,16 @@ export class AimsAuthError extends Error {
   }
 }
 
-type TokenResponse = {
+type TokenPayload = {
   access_token?: string;
   token_type?: string;
   expires_in?: number;
   refresh_token?: string;
+};
+
+type TokenResponse = TokenPayload & {
   responseCode?: string | number;
-  responseMessage?: string;
+  responseMessage?: string | TokenPayload;
 };
 
 type CachedToken = {
@@ -36,26 +39,49 @@ function parseJson(text: string): unknown {
   return text ? JSON.parse(text) : null;
 }
 
-function isSuccessResponse(payload: TokenResponse): boolean {
-  if (payload.responseCode === undefined) {
-    return Boolean(payload.access_token);
+function normalizeTokenPayload(payload: TokenResponse): TokenPayload {
+  if (payload.access_token) {
+    return payload;
   }
-  return String(payload.responseCode) === "200";
+
+  if (payload.responseMessage && typeof payload.responseMessage === "object") {
+    return payload.responseMessage;
+  }
+
+  return payload;
+}
+
+function getErrorMessage(payload: TokenResponse): string {
+  if (typeof payload.responseMessage === "string") {
+    return payload.responseMessage;
+  }
+
+  return "AIMS token response did not include access_token";
+}
+
+function isSuccessResponse(payload: TokenResponse): boolean {
+  const token = normalizeTokenPayload(payload);
+  if (payload.responseCode === undefined) {
+    return Boolean(token.access_token);
+  }
+  return String(payload.responseCode) === "200" && Boolean(token.access_token);
 }
 
 function extractToken(payload: TokenResponse): CachedToken {
-  if (!isSuccessResponse(payload) || !payload.access_token) {
-    throw new AimsAuthError(
-      payload.responseMessage ?? "AIMS token response did not include access_token",
-      500,
-      payload,
-    );
+  const token = normalizeTokenPayload(payload);
+
+  if (!isSuccessResponse(payload) || !token.access_token) {
+    throw new AimsAuthError(getErrorMessage(payload), 500, {
+      responseCode: payload.responseCode,
+      responseMessage:
+        typeof payload.responseMessage === "string" ? payload.responseMessage : "[redacted]",
+    });
   }
 
-  const expiresInSec = payload.expires_in ?? DEFAULT_TOKEN_TTL_SEC;
+  const expiresInSec = token.expires_in ?? DEFAULT_TOKEN_TTL_SEC;
   return {
-    accessToken: payload.access_token,
-    refreshToken: payload.refresh_token,
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token,
     expiresAt: Date.now() + expiresInSec * 1000 - TOKEN_EXPIRY_BUFFER_MS,
   };
 }
@@ -84,9 +110,13 @@ async function postTokenRequest(path: string, body: Record<string, string>): Pro
 
   if (!response.ok || !isSuccessResponse(payload)) {
     throw new AimsAuthError(
-      payload.responseMessage ?? `AIMS auth failed: ${response.status} ${response.statusText}`,
+      getErrorMessage(payload) || `AIMS auth failed: ${response.status} ${response.statusText}`,
       response.status,
-      payload,
+      {
+        responseCode: payload.responseCode,
+        responseMessage:
+          typeof payload.responseMessage === "string" ? payload.responseMessage : "[redacted]",
+      },
     );
   }
 
