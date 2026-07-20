@@ -39,19 +39,28 @@ curl -X POST https://your-app.railway.app/api/webhooks/pos \
 | 변수 | 필수 | 설명 |
 |------|------|------|
 | `AIMS_BASE_URL` | O | `https://asia.common.solumesl.com` (아시아 리전) |
-| `AIMS_API_KEY` | O | AIMS Access Token ([토큰 발급](https://asia.common.solumesl.com/common/token/)) |
+| `AIMS_USERNAME` | O | AIMS 관리자 이메일 (Azure AD B2C) |
+| `AIMS_PASSWORD` | O | AIMS 관리자 비밀번호 |
+| `AIMS_COMPANY_CODE` | | 토큰 갱신 시 필요 (SoluM에서 발급) |
 | `AIMS_STORE_ID` | | 매장 ID |
 | `AIMS_TENANT_ID` | | 테넌트 ID |
 | `WEBHOOK_SECRET` | | POS webhook 인증 시크릿 |
 
-### AIMS 인증 방법
+### AIMS 인증 방식
 
-1. AIMS SaaS 대시보드: https://asia.common.solumesl.com/
-2. 토큰 발급: https://asia.common.solumesl.com/common/token/
-3. Azure AD B2C에 등록된 이메일/비밀번호로 Access Token 발급
-4. 발급받은 토큰을 Railway의 `AIMS_API_KEY`에 설정
+SoluM AIMS는 **고정 API 키가 없습니다.** 서버가 Login API를 호출해 Bearer Token을 동적으로 발급받습니다.
 
-> AIMS API 엔드포인트(`/api/v1/...`)는 SoluM에서 제공하는 실제 API 문서에 맞게 `src/lib/aims/client.ts`에서 조정해야 합니다.
+```
+서버 시작 / API 호출 직전
+  └─ POST /common/api/v2/token  (username + password)
+       └─ access_token (24시간 유효)
+            └─ AIMS API 호출 시 Authorization: Bearer {token}
+  └─ 만료 시 POST /common/api/v2/token/refresh (companyCode + refreshToken)
+```
+
+Railway 환경 변수에 `AIMS_USERNAME`, `AIMS_PASSWORD`만 설정하면 토큰 발급·갱신은 자동 처리됩니다.
+
+> API 문서: https://asia.common.solumesl.com/docs/tutorial/token_generation
 
 ## 로컬 실행
 
@@ -67,14 +76,16 @@ npm run dev
 2. `gmdcok-crypto/esl` 레포지토리 연결
 3. 환경 변수 설정:
    - `AIMS_BASE_URL` = `https://asia.common.solumesl.com`
-   - `AIMS_API_KEY` = [토큰 발급 페이지](https://asia.common.solumesl.com/common/token/)에서 발급
+   - `AIMS_USERNAME` = AIMS 관리자 이메일
+   - `AIMS_PASSWORD` = AIMS 관리자 비밀번호
+   - `AIMS_COMPANY_CODE` = (선택) 토큰 자동 갱신용
 4. 배포 후 `GET /api/health`로 상태 확인
 
 `railway.toml`에 빌드/헬스체크 설정이 포함되어 있습니다.
 
 ## 개발 로드맵
 
-- [ ] SoluM AIMS 실제 API 스펙 반영
+- [x] SoluM AIMS Login API 동적 토큰 발급/갱신
 - [ ] 상품-라벨 매핑 관리 UI
 - [ ] 프로모션/가격 일괄 변경
 - [ ] 라벨 배터리·오프라인 알림

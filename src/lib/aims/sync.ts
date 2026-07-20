@@ -15,7 +15,7 @@ const updateProductSchema = z.object({
 
 export async function syncProductFromPos(input: unknown) {
   if (!isAimsConfigured()) {
-    throw new Error("AIMS is not configured. Set AIMS_BASE_URL and AIMS_API_KEY.");
+    throw new Error("AIMS is not configured. Set AIMS_BASE_URL, AIMS_USERNAME, and AIMS_PASSWORD.");
   }
 
   const payload = updateProductSchema.parse(input);

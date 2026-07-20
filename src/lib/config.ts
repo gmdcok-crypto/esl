@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const envSchema = z.object({
   AIMS_BASE_URL: z.string().url(),
-  AIMS_API_KEY: z.string().min(1),
+  AIMS_USERNAME: z.string().min(1),
+  AIMS_PASSWORD: z.string().min(1),
+  AIMS_COMPANY_CODE: z.string().optional(),
+  AIMS_API_BASE_URL: z.string().url().optional(),
   AIMS_STORE_ID: z.string().optional(),
   AIMS_TENANT_ID: z.string().optional(),
   WEBHOOK_SECRET: z.string().optional(),
@@ -29,6 +32,15 @@ export function getEnv(): Env {
   return cached;
 }
 
+export function getAimsApiBaseUrl(): string {
+  const env = getEnv();
+  return (env.AIMS_API_BASE_URL ?? `${env.AIMS_BASE_URL.replace(/\/$/, "")}/common/api/v2`).replace(/\/$/, "");
+}
+
 export function isAimsConfigured(): boolean {
-  return Boolean(process.env.AIMS_BASE_URL && process.env.AIMS_API_KEY);
+  return Boolean(
+    process.env.AIMS_BASE_URL &&
+      process.env.AIMS_USERNAME &&
+      process.env.AIMS_PASSWORD,
+  );
 }
