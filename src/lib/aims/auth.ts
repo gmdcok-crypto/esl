@@ -61,15 +61,23 @@ function extractToken(payload: TokenResponse): CachedToken {
 }
 
 async function postTokenRequest(path: string, body: Record<string, string>): Promise<CachedToken> {
-  const response = await fetch(`${getAimsApiBaseUrl()}${path}`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
+  const url = `${getAimsApiBaseUrl()}${path}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new AimsAuthError(`Failed to reach AIMS auth API (${url}): ${reason}`, 502);
+  }
 
   const text = await response.text();
   const payload = parseJson(text) as TokenResponse;
