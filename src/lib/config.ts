@@ -4,7 +4,6 @@ const envSchema = z.object({
   AIMS_BASE_URL: z.string().url(),
   AIMS_USERNAME: z.string().min(1),
   AIMS_PASSWORD: z.string().min(1),
-  AIMS_COMPANY_CODE: z.string().optional(),
   AIMS_API_BASE_URL: z.string().url().optional(),
   AIMS_STORE_ID: z.string().optional(),
   AIMS_TENANT_ID: z.string().optional(),

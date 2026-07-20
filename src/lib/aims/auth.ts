@@ -1,6 +1,7 @@
 import { getAimsApiBaseUrl, getEnv } from "@/lib/config";
 
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+const DEFAULT_TOKEN_TTL_SEC = 3600;
 
 export class AimsAuthError extends Error {
   constructor(
@@ -14,12 +15,11 @@ export class AimsAuthError extends Error {
 }
 
 type TokenResponse = {
-  access_token: string;
+  access_token?: string;
   token_type?: string;
   expires_in?: number;
   refresh_token?: string;
-  companyCode?: string;
-  responseCode?: string;
+  responseCode?: string | number;
   responseMessage?: string;
 };
 
@@ -36,8 +36,15 @@ function parseJson(text: string): unknown {
   return text ? JSON.parse(text) : null;
 }
 
+function isSuccessResponse(payload: TokenResponse): boolean {
+  if (payload.responseCode === undefined) {
+    return Boolean(payload.access_token);
+  }
+  return String(payload.responseCode) === "200";
+}
+
 function extractToken(payload: TokenResponse): CachedToken {
-  if (!payload.access_token) {
+  if (!isSuccessResponse(payload) || !payload.access_token) {
     throw new AimsAuthError(
       payload.responseMessage ?? "AIMS token response did not include access_token",
       500,
@@ -45,7 +52,7 @@ function extractToken(payload: TokenResponse): CachedToken {
     );
   }
 
-  const expiresInSec = payload.expires_in ?? 86400;
+  const expiresInSec = payload.expires_in ?? DEFAULT_TOKEN_TTL_SEC;
   return {
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
@@ -67,7 +74,7 @@ async function postTokenRequest(path: string, body: Record<string, string>): Pro
   const text = await response.text();
   const payload = parseJson(text) as TokenResponse;
 
-  if (!response.ok) {
+  if (!response.ok || !isSuccessResponse(payload)) {
     throw new AimsAuthError(
       payload.responseMessage ?? `AIMS auth failed: ${response.status} ${response.statusText}`,
       response.status,
@@ -87,18 +94,7 @@ async function loginWithCredentials(): Promise<CachedToken> {
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<CachedToken> {
-  const env = getEnv();
-  if (!env.AIMS_COMPANY_CODE) {
-    throw new AimsAuthError(
-      "AIMS_COMPANY_CODE is required to refresh tokens. Re-login with username/password.",
-      400,
-    );
-  }
-
-  return postTokenRequest("/token/refresh", {
-    companyCode: env.AIMS_COMPANY_CODE,
-    refreshToken,
-  });
+  return postTokenRequest("/token/refresh", { refreshToken });
 }
 
 async function acquireToken(force = false): Promise<string> {
