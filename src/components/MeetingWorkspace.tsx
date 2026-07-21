@@ -58,10 +58,15 @@ export function MeetingWorkspace() {
   const attendeeOptions = activeMeeting?.attendees ?? [];
 
   async function loadAll() {
-    const meetingData = await apiFetch<{ meetings: Meeting[] }>("/api/meetings");
-    setMeetings(meetingData.meetings);
-    if (!activeId && meetingData.meetings[0]) {
-      setActiveId(meetingData.meetings[0].id);
+    try {
+      const meetingData = await apiFetch<{ meetings: Meeting[] }>("/api/meetings");
+      setMeetings(meetingData.meetings);
+      if (!activeId && meetingData.meetings[0]) {
+        setActiveId(meetingData.meetings[0].id);
+      }
+    } catch (err) {
+      setMeetings([]);
+      setError(err instanceof Error ? err.message : "회의 목록을 불러오지 못했습니다.");
     }
 
     try {
@@ -86,12 +91,14 @@ export function MeetingWorkspace() {
     startTransition(async () => {
       try {
         await apiFetch("/api/auth/me");
-        await loadAll();
-        setReady(true);
       } catch {
         clearStoredToken();
         router.replace("/login");
+        return;
       }
+
+      await loadAll();
+      setReady(true);
     });
   }, [router]);
 

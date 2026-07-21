@@ -29,8 +29,13 @@ function normalizeAttendees(attendees: string[] | string): string[] {
 export async function GET(request: NextRequest) {
   const auth = await requireAppUser(request);
   if (auth.error) return auth.error;
-  const meetings = await listMeetings();
-  return NextResponse.json({ meetings });
+  try {
+    const meetings = await listMeetings();
+    return NextResponse.json({ meetings });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Database unavailable";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }
 
 export async function POST(request: NextRequest) {

@@ -11,8 +11,10 @@ function getJwtSecret(): Uint8Array {
 }
 
 export function isAppAuthConfigured(): boolean {
+  const secret = process.env.APP_JWT_SECRET?.trim();
   return Boolean(
-    process.env.APP_JWT_SECRET?.trim() &&
+    secret &&
+      secret.length >= 16 &&
       process.env.APP_USERNAME?.trim() &&
       process.env.APP_PASSWORD?.trim(),
   );

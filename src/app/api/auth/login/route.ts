@@ -32,11 +32,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
   }
 
-  const token = await signAppToken(parsed.data.username);
-  return NextResponse.json({
-    token,
-    tokenType: "Bearer",
-    expiresIn: "long-lived",
-    user: { username: parsed.data.username },
-  });
+  try {
+    const token = await signAppToken(parsed.data.username);
+    return NextResponse.json({
+      token,
+      tokenType: "Bearer",
+      expiresIn: "long-lived",
+      user: { username: parsed.data.username },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to issue token";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
