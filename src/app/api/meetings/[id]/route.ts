@@ -3,11 +3,17 @@ import { z } from "zod";
 import { deleteMeeting, getMeeting, updateMeeting } from "@/lib/meetings-store";
 import { requireAppUser } from "@/lib/require-app-user";
 
+const seatSchema = z.object({
+  labelCode: z.string().min(1),
+  articleId: z.string().min(1),
+  attendeeName: z.string().min(1),
+});
+
 const meetingSchema = z.object({
-  roomId: z.string().min(1).optional(),
   meetingName: z.string().min(1).optional(),
   organizerName: z.string().min(1).optional(),
   attendees: z.union([z.array(z.string().min(1)), z.string().min(1)]).optional(),
+  seats: z.array(seatSchema).optional(),
 });
 
 function normalizeAttendees(attendees: string[] | string): string[] {
@@ -46,9 +52,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const meeting = await updateMeeting(id, {
-    roomId: parsed.data.roomId,
     meetingName: parsed.data.meetingName,
     organizerName: parsed.data.organizerName,
+    seats: parsed.data.seats,
     ...(parsed.data.attendees !== undefined
       ? { attendees: normalizeAttendees(parsed.data.attendees) }
       : {}),

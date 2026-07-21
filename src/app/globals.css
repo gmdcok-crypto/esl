@@ -394,6 +394,140 @@ textarea {
   gap: 0.5rem;
 }
 
+.seat-layout {
+  align-items: start;
+}
+
+.panel-lead.tight {
+  margin-bottom: 0;
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.meeting-switch {
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.switch-label {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.meeting-mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.meeting-mini-list li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.meeting-chip {
+  flex: 1;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: rgba(8, 14, 12, 0.55);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+}
+
+.meeting-chip.active {
+  border-color: rgba(200, 242, 122, 0.55);
+  box-shadow: 0 0 0 2px var(--glow);
+}
+
+.btn-ghost.tiny {
+  min-height: 36px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.seat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.seat-row {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.seat-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.seat-code {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.seat-meta,
+.seat-article {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.dot.on {
+  background: var(--ok);
+}
+
+.dot.off {
+  background: #66776f;
+}
+
+.seat-combo {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.seat-combo span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.seat-combo select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(8, 14, 12, 0.65);
+  color: var(--text);
+  padding: 0.65rem 0.8rem;
+}
+
+.seat-actions {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -428,6 +562,11 @@ textarea {
 
   .meeting-item {
     grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .seat-row {
+    grid-template-columns: 1.2fr 0.8fr;
     align-items: center;
   }
 }

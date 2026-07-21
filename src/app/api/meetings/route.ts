@@ -3,11 +3,17 @@ import { z } from "zod";
 import { createMeeting, listMeetings } from "@/lib/meetings-store";
 import { requireAppUser } from "@/lib/require-app-user";
 
+const seatSchema = z.object({
+  labelCode: z.string().min(1),
+  articleId: z.string().min(1),
+  attendeeName: z.string().min(1),
+});
+
 const meetingSchema = z.object({
-  roomId: z.string().min(1),
   meetingName: z.string().min(1),
   organizerName: z.string().min(1),
   attendees: z.union([z.array(z.string().min(1)), z.string().min(1)]),
+  seats: z.array(seatSchema).optional(),
 });
 
 function normalizeAttendees(attendees: string[] | string): string[] {
@@ -38,10 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   const meeting = await createMeeting({
-    roomId: parsed.data.roomId,
     meetingName: parsed.data.meetingName,
     organizerName: parsed.data.organizerName,
     attendees: normalizeAttendees(parsed.data.attendees),
+    seats: parsed.data.seats ?? [],
   });
 
   return NextResponse.json({ meeting }, { status: 201 });

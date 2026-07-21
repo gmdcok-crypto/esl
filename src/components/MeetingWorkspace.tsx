@@ -1,23 +1,38 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, clearStoredToken, getStoredToken } from "@/lib/client-api";
 
+type SeatAssignment = {
+  labelCode: string;
+  articleId: string;
+  attendeeName: string;
+};
+
 type Meeting = {
   id: string;
-  roomId: string;
   meetingName: string;
   attendees: string[];
   organizerName: string;
+  seats: SeatAssignment[];
   lastPushedAt?: string;
   lastPushStatus?: "success" | "failed";
   lastPushError?: string;
   updatedAt: string;
 };
 
+type SeatLabel = {
+  labelCode: string;
+  articleId: string;
+  articleName?: string;
+  online: boolean;
+  battery?: string;
+  gatewayName?: string;
+  type?: string;
+};
+
 const emptyForm = {
-  roomId: "1",
   meetingName: "",
   organizerName: "",
   attendees: "",
@@ -26,16 +41,32 @@ const emptyForm = {
 export function MeetingWorkspace() {
   const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [labels, setLabels] = useState<SeatLabel[]>([]);
   const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [seatPick, setSeatPick] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [ready, setReady] = useState(false);
 
-  async function loadMeetings() {
-    const data = await apiFetch<{ meetings: Meeting[] }>("/api/meetings");
-    setMeetings(data.meetings);
+  const activeMeeting = useMemo(
+    () => meetings.find((m) => m.id === activeId) ?? null,
+    [meetings, activeId],
+  );
+
+  const attendeeOptions = activeMeeting?.attendees ?? [];
+
+  async function loadAll() {
+    const [meetingData, labelData] = await Promise.all([
+      apiFetch<{ meetings: Meeting[] }>("/api/meetings"),
+      apiFetch<{ labels: SeatLabel[] }>("/api/labels"),
+    ]);
+    setMeetings(meetingData.meetings);
+    setLabels(labelData.labels);
+    if (!activeId && meetingData.meetings[0]) {
+      setActiveId(meetingData.meetings[0].id);
+    }
   }
 
   useEffect(() => {
@@ -46,7 +77,7 @@ export function MeetingWorkspace() {
     startTransition(async () => {
       try {
         await apiFetch("/api/auth/me");
-        await loadMeetings();
+        await loadAll();
         setReady(true);
       } catch {
         clearStoredToken();
@@ -55,75 +86,119 @@ export function MeetingWorkspace() {
     });
   }, [router]);
 
-  function fillForm(meeting: Meeting) {
-    setEditingId(meeting.id);
+  useEffect(() => {
+    if (!activeMeeting) {
+      setSeatPick({});
+      return;
+    }
+    const next: Record<string, string> = {};
+    for (const seat of activeMeeting.seats) {
+      next[seat.labelCode] = seat.attendeeName;
+    }
+    setSeatPick(next);
     setForm({
-      roomId: meeting.roomId,
-      meetingName: meeting.meetingName,
-      organizerName: meeting.organizerName,
-      attendees: meeting.attendees.join(", "),
+      meetingName: activeMeeting.meetingName,
+      organizerName: activeMeeting.organizerName,
+      attendees: activeMeeting.attendees.join(", "),
     });
-  }
+  }, [activeMeeting]);
 
   function resetForm() {
-    setEditingId(null);
+    setActiveId(null);
     setForm(emptyForm);
+    setSeatPick({});
   }
 
-  async function onSave(event: FormEvent) {
+  async function onSaveMeeting(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setMessage(null);
     startTransition(async () => {
       try {
         const payload = {
-          roomId: form.roomId.trim(),
           meetingName: form.meetingName.trim(),
           organizerName: form.organizerName.trim(),
           attendees: form.attendees,
         };
-        if (editingId) {
-          await apiFetch(`/api/meetings/${editingId}`, {
+        if (activeId) {
+          await apiFetch(`/api/meetings/${activeId}`, {
             method: "PUT",
             body: JSON.stringify(payload),
           });
           setMessage("회의 정보가 저장되었습니다.");
         } else {
-          await apiFetch("/api/meetings", {
+          const created = await apiFetch<{ meeting: Meeting }>("/api/meetings", {
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setMessage("회의가 등록되었습니다.");
+          setActiveId(created.meeting.id);
+          setMessage("회의가 등록되었습니다. 명패에 참석자를 배정하세요.");
         }
-        resetForm();
-        await loadMeetings();
+        await loadAll();
       } catch (err) {
         setError(err instanceof Error ? err.message : "저장 실패");
       }
     });
   }
 
-  async function onPush(id: string) {
+  async function persistSeats(): Promise<number> {
+    if (!activeId) {
+      throw new Error("먼저 회의를 저장하세요.");
+    }
+    const seats: SeatAssignment[] = labels
+      .filter((label) => seatPick[label.labelCode] && label.articleId)
+      .map((label) => ({
+        labelCode: label.labelCode,
+        articleId: label.articleId,
+        attendeeName: seatPick[label.labelCode],
+      }));
+
+    await apiFetch(`/api/meetings/${activeId}`, {
+      method: "PUT",
+      body: JSON.stringify({ seats }),
+    });
+    return seats.length;
+  }
+
+  async function onSaveSeats() {
     setError(null);
     setMessage(null);
     startTransition(async () => {
       try {
-        await apiFetch(`/api/meetings/${id}/push`, { method: "POST" });
-        setMessage("전자명패로 전송 완료.");
-        await loadMeetings();
+        const count = await persistSeats();
+        setMessage(`좌석 배정 ${count}건 저장.`);
+        await loadAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "배정 저장 실패");
+      }
+    });
+  }
+
+  async function onPush() {
+    if (!activeId) return;
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        await persistSeats();
+        const result = await apiFetch<{ pushed: number }>(`/api/meetings/${activeId}/push`, {
+          method: "POST",
+        });
+        setMessage(`전자명패 ${result.pushed}장 전송 완료.`);
+        await loadAll();
       } catch (err) {
         setError(err instanceof Error ? err.message : "전송 실패");
-        await loadMeetings();
+        await loadAll();
       }
     });
   }
 
   async function onDelete(id: string) {
-    if (!window.confirm("이 회의 정보를 삭제할까요?")) return;
+    if (!window.confirm("이 회의를 삭제할까요?")) return;
     startTransition(async () => {
       await apiFetch(`/api/meetings/${id}`, { method: "DELETE" });
-      if (editingId === id) resetForm();
-      await loadMeetings();
+      if (activeId === id) resetForm();
+      await loadAll();
     });
   }
 
@@ -140,29 +215,20 @@ export function MeetingWorkspace() {
     <div className="workspace">
       <header className="workspace-top">
         <div>
-          <p className="eyebrow">Operator Desk</p>
-          <h1>회의 명패</h1>
+          <p className="eyebrow">Seat Nameplates</p>
+          <h1>좌석 명패 배정</h1>
         </div>
         <button type="button" className="btn-ghost" onClick={logout}>
           로그아웃
         </button>
       </header>
 
-      <div className="workspace-grid">
+      <div className="workspace-grid seat-layout">
         <section className="panel compose" aria-labelledby="compose-title">
-          <h2 id="compose-title">{editingId ? "회의 수정" : "새 회의"}</h2>
-          <p className="panel-lead">명패에 올릴 세 가지만 입력한 뒤 전송합니다.</p>
+          <h2 id="compose-title">{activeId ? "회의 정보" : "새 회의"}</h2>
+          <p className="panel-lead">회의명·주관기관·참석자 명단을 만든 뒤, 오른쪽에서 명패에 배정합니다.</p>
 
-          <form className="compose-form" onSubmit={onSave}>
-            <label>
-              <span>Article / 룸 ID</span>
-              <input
-                value={form.roomId}
-                onChange={(e) => setForm((f) => ({ ...f, roomId: e.target.value }))}
-                required
-                placeholder="예: 1"
-              />
-            </label>
+          <form className="compose-form" onSubmit={onSaveMeeting}>
             <label>
               <span>회의명</span>
               <input
@@ -182,27 +248,45 @@ export function MeetingWorkspace() {
               />
             </label>
             <label>
-              <span>참석자</span>
+              <span>참석자 명단 (콤보용)</span>
               <textarea
                 value={form.attendees}
                 onChange={(e) => setForm((f) => ({ ...f, attendees: e.target.value }))}
                 required
-                rows={3}
-                placeholder="김혜란, 홍길동"
+                rows={4}
+                placeholder="김혜란, 홍길동, 이영희"
               />
             </label>
 
             <div className="compose-actions">
               <button className="btn-primary" type="submit" disabled={pending}>
-                {editingId ? "저장" : "등록"}
+                회의 저장
               </button>
-              {editingId ? (
-                <button type="button" className="btn-ghost" onClick={resetForm}>
-                  새로 작성
-                </button>
-              ) : null}
+              <button type="button" className="btn-ghost" onClick={resetForm}>
+                새 회의
+              </button>
             </div>
           </form>
+
+          <div className="meeting-switch">
+            <p className="switch-label">저장된 회의</p>
+            <ul className="meeting-mini-list">
+              {meetings.map((meeting) => (
+                <li key={meeting.id}>
+                  <button
+                    type="button"
+                    className={`meeting-chip ${activeId === meeting.id ? "active" : ""}`}
+                    onClick={() => setActiveId(meeting.id)}
+                  >
+                    {meeting.meetingName}
+                  </button>
+                  <button type="button" className="btn-ghost danger tiny" onClick={() => onDelete(meeting.id)}>
+                    삭제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {message ? <p className="form-ok">{message}</p> : null}
           {error ? <p className="form-error">{error}</p> : null}
@@ -210,48 +294,65 @@ export function MeetingWorkspace() {
 
         <section className="panel board" aria-labelledby="board-title">
           <div className="board-head">
-            <h2 id="board-title">등록된 회의</h2>
-            <span className="count">{meetings.length}</span>
+            <div>
+              <h2 id="board-title">등록된 명패</h2>
+              <p className="panel-lead tight">명패마다 참석자를 콤보에서 선택합니다.</p>
+            </div>
+            <span className="count">{labels.length}</span>
           </div>
 
-          {meetings.length === 0 ? (
-            <p className="empty">아직 등록된 회의가 없습니다.</p>
+          {!activeMeeting ? (
+            <p className="empty">왼쪽에서 회의를 먼저 저장하세요.</p>
+          ) : labels.length === 0 ? (
+            <p className="empty">AIMS에 등록된 명패가 없습니다.</p>
           ) : (
-            <ul className="meeting-list">
-              {meetings.map((meeting) => (
-                <li key={meeting.id} className="meeting-item">
-                  <div className="meeting-main">
-                    <p className="meeting-name">{meeting.meetingName}</p>
-                    <p className="meeting-meta">
-                      <span>{meeting.organizerName}</span>
-                      <span aria-hidden>·</span>
-                      <span>룸 {meeting.roomId}</span>
+            <ul className="seat-list">
+              {labels.map((label) => (
+                <li key={label.labelCode} className="seat-row">
+                  <div className="seat-info">
+                    <p className="seat-code">{label.labelCode}</p>
+                    <p className="seat-meta">
+                      <span className={label.online ? "dot on" : "dot off"} />
+                      {label.online ? "Online" : "Offline"}
+                      {label.articleId ? ` · Article ${label.articleId}` : " · Article 없음"}
+                      {label.battery ? ` · ${label.battery}` : ""}
                     </p>
-                    <p className="meeting-people">{meeting.attendees.join(", ")}</p>
-                    {meeting.lastPushStatus ? (
-                      <p className={`push-status ${meeting.lastPushStatus}`}>
-                        {meeting.lastPushStatus === "success" ? "전송됨" : "전송 실패"}
-                        {meeting.lastPushedAt
-                          ? ` · ${new Date(meeting.lastPushedAt).toLocaleString("ko-KR")}`
-                          : ""}
-                      </p>
-                    ) : null}
+                    {label.articleName ? <p className="seat-article">{label.articleName}</p> : null}
                   </div>
-                  <div className="meeting-actions">
-                    <button type="button" className="btn-primary" onClick={() => onPush(meeting.id)} disabled={pending}>
-                      ESL 전송
-                    </button>
-                    <button type="button" className="btn-ghost" onClick={() => fillForm(meeting)}>
-                      수정
-                    </button>
-                    <button type="button" className="btn-ghost danger" onClick={() => onDelete(meeting.id)}>
-                      삭제
-                    </button>
-                  </div>
+
+                  <label className="seat-combo">
+                    <span>참석자</span>
+                    <select
+                      value={seatPick[label.labelCode] ?? ""}
+                      disabled={!label.articleId || attendeeOptions.length === 0}
+                      onChange={(e) =>
+                        setSeatPick((prev) => ({ ...prev, [label.labelCode]: e.target.value }))
+                      }
+                    >
+                      <option value="">선택</option>
+                      {attendeeOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </li>
               ))}
             </ul>
           )}
+
+          <div className="compose-actions seat-actions">
+            <button type="button" className="btn-ghost" onClick={() => startTransition(() => loadAll())} disabled={pending}>
+              명패 새로고침
+            </button>
+            <button type="button" className="btn-ghost" onClick={onSaveSeats} disabled={pending || !activeId}>
+              배정 저장
+            </button>
+            <button type="button" className="btn-primary" onClick={onPush} disabled={pending || !activeId}>
+              ESL 일괄 전송
+            </button>
+          </div>
         </section>
       </div>
     </div>

@@ -2,12 +2,18 @@ import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
+export type SeatAssignment = {
+  labelCode: string;
+  articleId: string;
+  attendeeName: string;
+};
+
 export type MeetingRecord = {
   id: string;
-  roomId: string;
   meetingName: string;
   attendees: string[];
   organizerName: string;
+  seats: SeatAssignment[];
   lastPushedAt?: string;
   lastPushStatus?: "success" | "failed";
   lastPushError?: string;
@@ -24,15 +30,31 @@ function dataFilePath(): string {
   return path.join(dir, "meetings.json");
 }
 
+function normalizeMeeting(raw: Partial<MeetingRecord> & { roomId?: string }): MeetingRecord | null {
+  if (!raw.id || !raw.meetingName || !raw.organizerName) return null;
+  return {
+    id: raw.id,
+    meetingName: raw.meetingName,
+    organizerName: raw.organizerName,
+    attendees: Array.isArray(raw.attendees) ? raw.attendees : [],
+    seats: Array.isArray(raw.seats) ? raw.seats : [],
+    lastPushedAt: raw.lastPushedAt,
+    lastPushStatus: raw.lastPushStatus,
+    lastPushError: raw.lastPushError,
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+    updatedAt: raw.updatedAt ?? new Date().toISOString(),
+  };
+}
+
 async function ensureStore(): Promise<MeetingStore> {
   const file = dataFilePath();
   try {
     const raw = await fs.readFile(file, "utf8");
     const parsed = JSON.parse(raw) as MeetingStore;
-    if (!Array.isArray(parsed.meetings)) {
-      return { meetings: [] };
-    }
-    return parsed;
+    const meetings = (parsed.meetings ?? [])
+      .map((m) => normalizeMeeting(m as MeetingRecord & { roomId?: string }))
+      .filter((m): m is MeetingRecord => Boolean(m));
+    return { meetings };
   } catch {
     const empty: MeetingStore = { meetings: [] };
     await fs.mkdir(path.dirname(file), { recursive: true });
@@ -58,19 +80,19 @@ export async function getMeeting(id: string): Promise<MeetingRecord | null> {
 }
 
 export async function createMeeting(input: {
-  roomId: string;
   meetingName: string;
   attendees: string[];
   organizerName: string;
+  seats?: SeatAssignment[];
 }): Promise<MeetingRecord> {
   const store = await ensureStore();
   const now = new Date().toISOString();
   const meeting: MeetingRecord = {
     id: randomUUID(),
-    roomId: input.roomId,
     meetingName: input.meetingName,
     attendees: input.attendees,
     organizerName: input.organizerName,
+    seats: input.seats ?? [],
     createdAt: now,
     updatedAt: now,
   };
@@ -82,10 +104,10 @@ export async function createMeeting(input: {
 export async function updateMeeting(
   id: string,
   input: Partial<{
-    roomId: string;
     meetingName: string;
     attendees: string[];
     organizerName: string;
+    seats: SeatAssignment[];
     lastPushedAt: string;
     lastPushStatus: "success" | "failed";
     lastPushError?: string;
