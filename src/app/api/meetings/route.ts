@@ -26,6 +26,18 @@ function normalizeAttendees(attendees: string[] | string): string[] {
     .filter(Boolean);
 }
 
+function databaseErrorResponse(error: unknown) {
+  const message = error instanceof Error ? error.message : "Database unavailable";
+  return NextResponse.json(
+    {
+      error: message.includes("not configured")
+        ? "MySQL이 연결되지 않았습니다. Railway에서 MySQL 서비스를 ESL 앱에 연결해 주세요."
+        : `데이터베이스 연결 실패: ${message}`,
+    },
+    { status: 503 },
+  );
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAppUser(request);
   if (auth.error) return auth.error;
@@ -33,8 +45,7 @@ export async function GET(request: NextRequest) {
     const meetings = await listMeetings();
     return NextResponse.json({ meetings });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Database unavailable";
-    return NextResponse.json({ error: message }, { status: 503 });
+    return databaseErrorResponse(error);
   }
 }
 
@@ -58,7 +69,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ meeting }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Database unavailable";
-    return NextResponse.json({ error: message }, { status: 503 });
+    return databaseErrorResponse(error);
   }
 }
