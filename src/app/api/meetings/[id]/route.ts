@@ -52,9 +52,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const meeting = await updateMeeting(id, {
-    meetingName: parsed.data.meetingName,
-    organizerName: parsed.data.organizerName,
-    seats: parsed.data.seats,
+    ...(parsed.data.meetingName !== undefined ? { meetingName: parsed.data.meetingName } : {}),
+    ...(parsed.data.organizerName !== undefined ? { organizerName: parsed.data.organizerName } : {}),
+    ...(parsed.data.seats !== undefined ? { seats: parsed.data.seats } : {}),
     ...(parsed.data.attendees !== undefined
       ? { attendees: normalizeAttendees(parsed.data.attendees) }
       : {}),

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
-import { promises as fs } from "fs";
-import path from "path";
+import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import { withDatabase } from "@/lib/db";
 
 export type SeatAssignment = {
   labelCode: string;
@@ -21,62 +21,78 @@ export type MeetingRecord = {
   updatedAt: string;
 };
 
-type MeetingStore = {
-  meetings: MeetingRecord[];
+type MeetingRow = RowDataPacket & {
+  id: string;
+  meeting_name: string;
+  organizer_name: string;
+  attendees: string | string[];
+  seats: string | SeatAssignment[];
+  last_pushed_at: Date | string | null;
+  last_push_status: "success" | "failed" | null;
+  last_push_error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
 };
 
-function dataFilePath(): string {
-  const dir = process.env.DATA_DIR?.trim() || path.join(process.cwd(), "data");
-  return path.join(dir, "meetings.json");
-}
-
-function normalizeMeeting(raw: Partial<MeetingRecord> & { roomId?: string }): MeetingRecord | null {
-  if (!raw.id || !raw.meetingName || !raw.organizerName) return null;
-  return {
-    id: raw.id,
-    meetingName: raw.meetingName,
-    organizerName: raw.organizerName,
-    attendees: Array.isArray(raw.attendees) ? raw.attendees : [],
-    seats: Array.isArray(raw.seats) ? raw.seats : [],
-    lastPushedAt: raw.lastPushedAt,
-    lastPushStatus: raw.lastPushStatus,
-    lastPushError: raw.lastPushError,
-    createdAt: raw.createdAt ?? new Date().toISOString(),
-    updatedAt: raw.updatedAt ?? new Date().toISOString(),
-  };
-}
-
-async function ensureStore(): Promise<MeetingStore> {
-  const file = dataFilePath();
-  try {
-    const raw = await fs.readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as MeetingStore;
-    const meetings = (parsed.meetings ?? [])
-      .map((m) => normalizeMeeting(m as MeetingRecord & { roomId?: string }))
-      .filter((m): m is MeetingRecord => Boolean(m));
-    return { meetings };
-  } catch {
-    const empty: MeetingStore = { meetings: [] };
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, JSON.stringify(empty, null, 2), "utf8");
-    return empty;
+function parseJson<T>(value: string | T): T {
+  if (typeof value === "string") {
+    return JSON.parse(value) as T;
   }
+  return value;
 }
 
-async function writeStore(store: MeetingStore): Promise<void> {
-  const file = dataFilePath();
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(store, null, 2), "utf8");
+function toIso(value: Date | string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value.toISOString();
+  return new Date(value).toISOString();
+}
+
+function rowToMeeting(row: MeetingRow): MeetingRecord {
+  const meeting: MeetingRecord = {
+    id: row.id,
+    meetingName: row.meeting_name,
+    organizerName: row.organizer_name,
+    attendees: parseJson<string[]>(row.attendees),
+    seats: parseJson<SeatAssignment[]>(row.seats),
+    createdAt: toIso(row.created_at) ?? new Date().toISOString(),
+    updatedAt: toIso(row.updated_at) ?? new Date().toISOString(),
+  };
+
+  const lastPushedAt = toIso(row.last_pushed_at);
+  if (lastPushedAt) meeting.lastPushedAt = lastPushedAt;
+  if (row.last_push_status) meeting.lastPushStatus = row.last_push_status;
+  if (row.last_push_error) meeting.lastPushError = row.last_push_error;
+
+  return meeting;
 }
 
 export async function listMeetings(): Promise<MeetingRecord[]> {
-  const store = await ensureStore();
-  return [...store.meetings].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return withDatabase(async (db) => {
+    const [rows] = await db.query<MeetingRow[]>(
+      `SELECT id, meeting_name, organizer_name, attendees, seats,
+              last_pushed_at, last_push_status, last_push_error,
+              created_at, updated_at
+       FROM meetings
+       ORDER BY updated_at DESC`,
+    );
+    return rows.map(rowToMeeting);
+  });
 }
 
 export async function getMeeting(id: string): Promise<MeetingRecord | null> {
-  const store = await ensureStore();
-  return store.meetings.find((m) => m.id === id) ?? null;
+  return withDatabase(async (db) => {
+    const [rows] = await db.query<MeetingRow[]>(
+      `SELECT id, meeting_name, organizer_name, attendees, seats,
+              last_pushed_at, last_push_status, last_push_error,
+              created_at, updated_at
+       FROM meetings
+       WHERE id = ?
+       LIMIT 1`,
+      [id],
+    );
+    const row = rows[0];
+    return row ? rowToMeeting(row) : null;
+  });
 }
 
 export async function createMeeting(input: {
@@ -85,58 +101,120 @@ export async function createMeeting(input: {
   organizerName: string;
   seats?: SeatAssignment[];
 }): Promise<MeetingRecord> {
-  const store = await ensureStore();
-  const now = new Date().toISOString();
-  const meeting: MeetingRecord = {
-    id: randomUUID(),
-    meetingName: input.meetingName,
-    attendees: input.attendees,
-    organizerName: input.organizerName,
-    seats: input.seats ?? [],
-    createdAt: now,
-    updatedAt: now,
+  return withDatabase(async (db) => {
+    const id = randomUUID();
+    const now = new Date();
+    await db.execute(
+      `INSERT INTO meetings (
+         id, meeting_name, organizer_name, attendees, seats,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.meetingName,
+        input.organizerName,
+        JSON.stringify(input.attendees),
+        JSON.stringify(input.seats ?? []),
+        now,
+        now,
+      ],
+    );
+    const meeting = await fetchMeetingRow(db, id);
+    if (!meeting) {
+      throw new Error("Failed to create meeting");
+    }
+    return meeting;
+  });
+}
+
+type MeetingUpdateInput = Partial<{
+  meetingName: string;
+  attendees: string[];
+  organizerName: string;
+  seats: SeatAssignment[];
+  lastPushedAt: string;
+  lastPushStatus: "success" | "failed";
+  lastPushError?: string;
+}>;
+
+function applyMeetingUpdate(current: MeetingRecord, input: MeetingUpdateInput): MeetingRecord {
+  const updated: MeetingRecord = {
+    ...current,
+    updatedAt: new Date().toISOString(),
   };
-  store.meetings.push(meeting);
-  await writeStore(store);
-  return meeting;
+
+  if (input.meetingName !== undefined) updated.meetingName = input.meetingName;
+  if (input.organizerName !== undefined) updated.organizerName = input.organizerName;
+  if (input.attendees !== undefined) updated.attendees = input.attendees;
+  if (input.seats !== undefined) updated.seats = input.seats;
+  if (input.lastPushedAt !== undefined) updated.lastPushedAt = input.lastPushedAt;
+  if (input.lastPushStatus !== undefined) updated.lastPushStatus = input.lastPushStatus;
+  if ("lastPushError" in input) {
+    if (input.lastPushError === undefined) delete updated.lastPushError;
+    else updated.lastPushError = input.lastPushError;
+  }
+
+  return updated;
+}
+
+async function fetchMeetingRow(db: Pool, id: string): Promise<MeetingRecord | null> {
+  const [rows] = await db.query<MeetingRow[]>(
+    `SELECT id, meeting_name, organizer_name, attendees, seats,
+            last_pushed_at, last_push_status, last_push_error,
+            created_at, updated_at
+     FROM meetings
+     WHERE id = ?
+     LIMIT 1`,
+    [id],
+  );
+  const row = rows[0];
+  return row ? rowToMeeting(row) : null;
 }
 
 export async function updateMeeting(
   id: string,
-  input: Partial<{
-    meetingName: string;
-    attendees: string[];
-    organizerName: string;
-    seats: SeatAssignment[];
-    lastPushedAt: string;
-    lastPushStatus: "success" | "failed";
-    lastPushError?: string;
-  }>,
+  input: MeetingUpdateInput,
 ): Promise<MeetingRecord | null> {
-  const store = await ensureStore();
-  const index = store.meetings.findIndex((m) => m.id === id);
-  if (index < 0) return null;
+  return withDatabase(async (db) => {
+    const current = await fetchMeetingRow(db, id);
+    if (!current) return null;
 
-  const current = store.meetings[index];
-  const updated: MeetingRecord = {
-    ...current,
-    ...input,
-    lastPushError: input.lastPushError,
-    updatedAt: new Date().toISOString(),
-  };
-  if ("lastPushError" in input && input.lastPushError === undefined) {
-    delete updated.lastPushError;
-  }
-  store.meetings[index] = updated;
-  await writeStore(store);
-  return updated;
+    const updated = applyMeetingUpdate(current, input);
+
+    await db.execute(
+      `UPDATE meetings SET
+         meeting_name = ?,
+         organizer_name = ?,
+         attendees = ?,
+         seats = ?,
+         last_pushed_at = ?,
+         last_push_status = ?,
+         last_push_error = ?,
+         updated_at = ?
+       WHERE id = ?`,
+      [
+        updated.meetingName,
+        updated.organizerName,
+        JSON.stringify(updated.attendees),
+        JSON.stringify(updated.seats),
+        updated.lastPushedAt ? new Date(updated.lastPushedAt) : null,
+        updated.lastPushStatus ?? null,
+        updated.lastPushError ?? null,
+        new Date(updated.updatedAt),
+        id,
+      ],
+    );
+
+    return fetchMeetingRow(db, id);
+  });
 }
 
 export async function deleteMeeting(id: string): Promise<boolean> {
-  const store = await ensureStore();
-  const next = store.meetings.filter((m) => m.id !== id);
-  if (next.length === store.meetings.length) return false;
-  store.meetings = next;
-  await writeStore(store);
-  return true;
+  return withDatabase(async (db) => {
+    const [result] = await db.execute<ResultSetHeader>(
+      "DELETE FROM meetings WHERE id = ?",
+      [id],
+    );
+    return result.affectedRows > 0;
+  });
 }
