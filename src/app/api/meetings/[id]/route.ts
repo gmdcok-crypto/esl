@@ -51,19 +51,24 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Invalid meeting payload", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const meeting = await updateMeeting(id, {
-    ...(parsed.data.meetingName !== undefined ? { meetingName: parsed.data.meetingName } : {}),
-    ...(parsed.data.organizerName !== undefined ? { organizerName: parsed.data.organizerName } : {}),
-    ...(parsed.data.seats !== undefined ? { seats: parsed.data.seats } : {}),
-    ...(parsed.data.attendees !== undefined
-      ? { attendees: normalizeAttendees(parsed.data.attendees) }
-      : {}),
-  });
+  try {
+    const meeting = await updateMeeting(id, {
+      ...(parsed.data.meetingName !== undefined ? { meetingName: parsed.data.meetingName } : {}),
+      ...(parsed.data.organizerName !== undefined ? { organizerName: parsed.data.organizerName } : {}),
+      ...(parsed.data.seats !== undefined ? { seats: parsed.data.seats } : {}),
+      ...(parsed.data.attendees !== undefined
+        ? { attendees: normalizeAttendees(parsed.data.attendees) }
+        : {}),
+    });
 
-  if (!meeting) {
-    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+    if (!meeting) {
+      return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+    }
+    return NextResponse.json({ meeting });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Database unavailable";
+    return NextResponse.json({ error: message }, { status: 503 });
   }
-  return NextResponse.json({ meeting });
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {

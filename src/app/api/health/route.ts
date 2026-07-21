@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAppAuthConfigured } from "@/lib/app-auth";
 import { isAimsConfigured } from "@/lib/config";
-import { isDatabaseConfigured, pingDatabase } from "@/lib/db";
+import { getLastDatabaseError, isDatabaseConfigured, pingDatabase } from "@/lib/db";
 
 export async function GET() {
   const databaseConfigured = isDatabaseConfigured();
@@ -14,6 +14,7 @@ export async function GET() {
     appAuthConfigured: isAppAuthConfigured(),
     databaseConfigured,
     databaseOk,
+    databaseError: databaseOk ? undefined : getLastDatabaseError() ?? "Database connection failed",
     timestamp: new Date().toISOString(),
   });
 }

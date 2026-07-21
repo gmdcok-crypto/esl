@@ -48,12 +48,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid meeting payload", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const meeting = await createMeeting({
-    meetingName: parsed.data.meetingName,
-    organizerName: parsed.data.organizerName,
-    attendees: normalizeAttendees(parsed.data.attendees),
-    seats: parsed.data.seats ?? [],
-  });
+  try {
+    const meeting = await createMeeting({
+      meetingName: parsed.data.meetingName,
+      organizerName: parsed.data.organizerName,
+      attendees: normalizeAttendees(parsed.data.attendees),
+      seats: parsed.data.seats ?? [],
+    });
 
-  return NextResponse.json({ meeting }, { status: 201 });
+    return NextResponse.json({ meeting }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Database unavailable";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }

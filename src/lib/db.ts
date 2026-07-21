@@ -2,6 +2,7 @@ import mysql, { type PoolOptions } from "mysql2/promise";
 
 let pool: mysql.Pool | null = null;
 let schemaReady: Promise<void> | null = null;
+let lastDatabaseError: string | null = null;
 
 function trim(value: string | undefined): string | undefined {
   return value?.trim() || undefined;
@@ -27,8 +28,19 @@ export function isDatabaseConfigured(): boolean {
   return Boolean(host && user && password && database);
 }
 
-function shouldUseSsl(): boolean {
-  return process.env.NODE_ENV === "production" || trim(process.env.MYSQL_SSL) === "true";
+export function getLastDatabaseError(): string | null {
+  return lastDatabaseError;
+}
+
+function resolveSsl(host: string): PoolOptions["ssl"] {
+  const override = trim(process.env.MYSQL_SSL);
+  if (override === "true") return { rejectUnauthorized: false };
+  if (override === "false") return undefined;
+
+  // Railway private network MySQL does not use TLS at the protocol layer.
+  if (host.includes("railway.internal")) return undefined;
+
+  return undefined;
 }
 
 function poolOptionsFromUrl(url: string): PoolOptions {
@@ -41,16 +53,11 @@ function poolOptionsFromUrl(url: string): PoolOptions {
     database: parsed.pathname.replace(/^\//, ""),
     waitForConnections: true,
     connectionLimit: 10,
-    ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
+    ssl: resolveSsl(parsed.hostname),
   };
 }
 
-function getPoolOptions(): PoolOptions {
-  const url = databaseUrlCandidates()[0];
-  if (url) {
-    return poolOptionsFromUrl(url);
-  }
-
+function poolOptionsFromEnvVars(): PoolOptions | null {
   const host = trim(process.env.MYSQLHOST) ?? trim(process.env.MYSQL_HOST);
   const port = Number(trim(process.env.MYSQLPORT) ?? trim(process.env.MYSQL_PORT) ?? "3306");
   const user = trim(process.env.MYSQLUSER) ?? trim(process.env.MYSQL_USER);
@@ -58,9 +65,7 @@ function getPoolOptions(): PoolOptions {
   const database = trim(process.env.MYSQLDATABASE) ?? trim(process.env.MYSQL_DATABASE);
 
   if (!host || !user || !password || !database) {
-    throw new Error(
-      "MySQL is not configured. Link Railway MySQL to this service or set MYSQL_URL.",
-    );
+    return null;
   }
 
   return {
@@ -71,8 +76,24 @@ function getPoolOptions(): PoolOptions {
     database,
     waitForConnections: true,
     connectionLimit: 10,
-    ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
+    ssl: resolveSsl(host),
   };
+}
+
+function getPoolOptions(): PoolOptions {
+  const fromEnv = poolOptionsFromEnvVars();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  const url = databaseUrlCandidates()[0];
+  if (url) {
+    return poolOptionsFromUrl(url);
+  }
+
+  throw new Error(
+    "MySQL is not configured. Link Railway MySQL to this service or set MYSQL_URL.",
+  );
 }
 
 export function getPool(): mysql.Pool {
@@ -82,23 +103,33 @@ export function getPool(): mysql.Pool {
   return pool;
 }
 
+function rememberDatabaseError(error: unknown): never {
+  lastDatabaseError = error instanceof Error ? error.message : "Database connection failed";
+  throw error;
+}
+
 async function ensureSchema(): Promise<void> {
   const db = getPool();
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS meetings (
-      id CHAR(36) PRIMARY KEY,
-      meeting_name VARCHAR(255) NOT NULL,
-      organizer_name VARCHAR(255) NOT NULL,
-      attendees JSON NOT NULL,
-      seats JSON NOT NULL,
-      last_pushed_at DATETIME(3) NULL,
-      last_push_status VARCHAR(16) NULL,
-      last_push_error TEXT NULL,
-      created_at DATETIME(3) NOT NULL,
-      updated_at DATETIME(3) NOT NULL,
-      INDEX idx_meetings_updated (updated_at DESC)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS meetings (
+        id CHAR(36) PRIMARY KEY,
+        meeting_name VARCHAR(255) NOT NULL,
+        organizer_name VARCHAR(255) NOT NULL,
+        attendees JSON NOT NULL,
+        seats JSON NOT NULL,
+        last_pushed_at DATETIME(3) NULL,
+        last_push_status VARCHAR(16) NULL,
+        last_push_error TEXT NULL,
+        created_at DATETIME(3) NOT NULL,
+        updated_at DATETIME(3) NOT NULL,
+        INDEX idx_meetings_updated (updated_at DESC)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    lastDatabaseError = null;
+  } catch (error) {
+    rememberDatabaseError(error);
+  }
 }
 
 export async function withDatabase<T>(fn: (db: mysql.Pool) => Promise<T>): Promise<T> {
@@ -111,8 +142,12 @@ export async function withDatabase<T>(fn: (db: mysql.Pool) => Promise<T>): Promi
       throw error;
     });
   }
-  await schemaReady;
-  return fn(getPool());
+  try {
+    await schemaReady;
+    return await fn(getPool());
+  } catch (error) {
+    rememberDatabaseError(error);
+  }
 }
 
 export async function pingDatabase(): Promise<boolean> {
@@ -121,6 +156,7 @@ export async function pingDatabase(): Promise<boolean> {
     await withDatabase(async (db) => {
       await db.query("SELECT 1");
     });
+    lastDatabaseError = null;
     return true;
   } catch {
     return false;
