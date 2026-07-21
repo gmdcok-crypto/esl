@@ -4,6 +4,7 @@ export const meetingDisplaySchema = z.object({
   roomId: z.string().min(1),
   meetingName: z.string().min(1),
   attendees: z.union([z.array(z.string().min(1)), z.string().min(1)]),
+  organizerName: z.string().min(1),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
 });
@@ -12,7 +13,7 @@ export type MeetingDisplayInput = z.infer<typeof meetingDisplaySchema>;
 
 /**
  * AIMS SaaS Article upsert body.
- * Fields inside `data` must match the store Product File Config / template fields.
+ * Template fields: MEETING_NAME, ATTENDEES, ORGANIZER_NAME
  */
 export type AimsMeetingArticlePayload = Array<{
   articleId: string;
@@ -35,6 +36,7 @@ export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArt
     ITEM_NAME: input.meetingName,
     MEETING_NAME: input.meetingName,
     ATTENDEES: attendees,
+    ORGANIZER_NAME: input.organizerName,
   };
 
   if (input.startTime) {
