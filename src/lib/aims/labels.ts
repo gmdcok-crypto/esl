@@ -13,6 +13,7 @@ export type SeatLabel = {
 
 type AimsLabelRaw = {
   labelCode?: string;
+  label?: string;
   networkStatus?: boolean;
   battery?: string;
   type?: string;
@@ -21,26 +22,28 @@ type AimsLabelRaw = {
   articleList?: Array<{ articleId?: string; articleName?: string }>;
 };
 
-export async function listSeatLabels(): Promise<SeatLabel[]> {
-  const aims = getAimsClient();
-  const raw = (await aims.listLabels(1, 100)) as unknown;
+export function extractLabelList(raw: unknown): AimsLabelRaw[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as AimsLabelRaw[];
+  if (typeof raw !== "object") return [];
 
-  const labelList = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === "object" && "labelList" in raw
-      ? ((raw as { labelList?: AimsLabelRaw[] }).labelList ?? [])
-      : raw && typeof raw === "object" && "items" in raw
-        ? ((raw as { items?: AimsLabelRaw[] }).items ?? [])
-        : [];
+  const obj = raw as Record<string, unknown>;
+  if (Array.isArray(obj.labelList)) return obj.labelList as AimsLabelRaw[];
+  if (Array.isArray(obj.items)) return obj.items as AimsLabelRaw[];
+  if (Array.isArray(obj.labels)) return obj.labels as AimsLabelRaw[];
+  return [];
+}
 
-  return labelList
+export function mapSeatLabels(raw: unknown): SeatLabel[] {
+  return extractLabelList(raw)
     .map((label) => {
       const article = label.articleList?.[0];
       const template = Array.isArray(label.templateName)
         ? label.templateName[0]
         : label.templateName;
+      const labelCode = label.labelCode ?? label.label ?? "";
       return {
-        labelCode: label.labelCode ?? "",
+        labelCode,
         articleId: article?.articleId ?? "",
         articleName: article?.articleName,
         online: Boolean(label.networkStatus),
@@ -50,7 +53,13 @@ export async function listSeatLabels(): Promise<SeatLabel[]> {
         templateName: template,
       };
     })
-    .filter((label) => label.labelCode);
+    .filter((label) => Boolean(label.labelCode));
+}
+
+export async function listSeatLabels(): Promise<{ labels: SeatLabel[]; raw: unknown }> {
+  const aims = getAimsClient();
+  const raw = await aims.listLabels();
+  return { labels: mapSeatLabels(raw), raw };
 }
 
 export { AimsClientError };

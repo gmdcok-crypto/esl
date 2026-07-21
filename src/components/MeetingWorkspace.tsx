@@ -58,14 +58,23 @@ export function MeetingWorkspace() {
   const attendeeOptions = activeMeeting?.attendees ?? [];
 
   async function loadAll() {
-    const [meetingData, labelData] = await Promise.all([
-      apiFetch<{ meetings: Meeting[] }>("/api/meetings"),
-      apiFetch<{ labels: SeatLabel[] }>("/api/labels"),
-    ]);
+    const meetingData = await apiFetch<{ meetings: Meeting[] }>("/api/meetings");
     setMeetings(meetingData.meetings);
-    setLabels(labelData.labels);
     if (!activeId && meetingData.meetings[0]) {
       setActiveId(meetingData.meetings[0].id);
+    }
+
+    try {
+      const labelData = await apiFetch<{ labels: SeatLabel[]; count?: number; error?: string }>(
+        "/api/labels",
+      );
+      setLabels(labelData.labels ?? []);
+      if (labelData.error) {
+        setError(labelData.error);
+      }
+    } catch (err) {
+      setLabels([]);
+      setError(err instanceof Error ? err.message : "명패 목록을 불러오지 못했습니다.");
     }
   }
 

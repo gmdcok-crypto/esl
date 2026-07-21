@@ -202,10 +202,9 @@ export class AimsClient {
     return this.updateProduct(payload);
   }
 
-  async listLabels(page = 1, pageSize = 50): Promise<AimsListResponse<AimsLabel>> {
-    return this.request<AimsListResponse<AimsLabel>>("/common/labels", {
-      query: { page, size: pageSize },
-    });
+  async listLabels(): Promise<{ labelList: unknown[] } | unknown> {
+    // Match working probe call: only company + store (no page/size).
+    return this.request("/common/labels");
   }
 
   async assignLabel(payload: AssignLabelPayload): Promise<AimsLabel> {
