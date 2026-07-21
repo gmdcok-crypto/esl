@@ -43,57 +43,56 @@ function getApiErrorMessage(payload: AimsApiError | undefined, fallback: string)
   if (typeof payload.message === "string") return payload.message;
   return fallback;
 }
+
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | undefined>;
   retryOnUnauthorized?: boolean;
-  /** Articles API uses stationCode in body instead of storeId query. */
-  skipStoreQuery?: boolean;
 };
 
 export class AimsClient {
   private readonly apiBaseUrl: string;
-  private readonly storeId?: string;
-  private readonly tenantId?: string;
+  private readonly storeCode?: string;
   private readonly companyCode?: string;
 
   constructor() {
     const env = getEnv();
     this.apiBaseUrl = getAimsApiBaseUrl();
-    this.storeId = env.AIMS_STORE_ID;
-    this.tenantId = env.AIMS_TENANT_ID;
+    this.storeCode = env.AIMS_STORE_ID;
     this.companyCode = env.AIMS_COMPANY_CODE;
   }
 
-  private buildUrl(path: string, query?: RequestOptions["query"], skipStoreQuery = false): string {
+  /** AIMS SaaS docs: required query params are `company` and `store`. */
+  private requiredQuery(): Record<string, string> {
+    const query: Record<string, string> = {};
+    if (this.companyCode) query.company = this.companyCode;
+    if (this.storeCode) query.store = this.storeCode;
+    return query;
+  }
+
+  private buildUrl(path: string, query?: RequestOptions["query"]): string {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
     const url = new URL(`${this.apiBaseUrl}${normalizedPath}`);
-    if (this.storeId && !skipStoreQuery) {
-      url.searchParams.set("storeId", this.storeId);
-    }
-    if (query) {
-      for (const [key, value] of Object.entries(query)) {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
+    const merged = { ...this.requiredQuery(), ...query };
+    for (const [key, value] of Object.entries(merged)) {
+      if (value !== undefined && value !== "") {
+        url.searchParams.set(key, String(value));
       }
     }
     return url.toString();
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { method = "GET", body, query, retryOnUnauthorized = true, skipStoreQuery = false } = options;
+    const { method = "GET", body, query, retryOnUnauthorized = true } = options;
     const accessToken = await getAimsAccessToken();
 
-    const response = await fetch(this.buildUrl(path, query, skipStoreQuery), {
+    const response = await fetch(this.buildUrl(path, query), {
       method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
-        ...(this.tenantId ? { "X-Tenant-Id": this.tenantId } : {}),
-        ...(this.companyCode ? { "Company-Code": this.companyCode } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
@@ -119,7 +118,10 @@ export class AimsClient {
 
     if (!response.ok) {
       throw new AimsClientError(
-        getApiErrorMessage(payload as AimsApiError | undefined, `AIMS API request failed: ${response.status} ${response.statusText}`),
+        getApiErrorMessage(
+          payload as AimsApiError | undefined,
+          `AIMS API request failed: ${response.status} ${response.statusText}`,
+        ),
         response.status,
         payload as AimsApiError | undefined,
       );
@@ -129,11 +131,12 @@ export class AimsClient {
   }
 
   async listStores(): Promise<AimsStore[]> {
-    const stores = await this.request<AimsStore[] | { stores?: AimsStore[] }>("/common/store");
-    if (Array.isArray(stores)) {
-      return stores;
+    const stores = await this.request<AimsStore[] | AimsStore | { stores?: AimsStore[] }>("/common/store");
+    if (Array.isArray(stores)) return stores;
+    if (stores && typeof stores === "object" && "stores" in stores) {
+      return stores.stores ?? [];
     }
-    return stores.stores ?? [];
+    return stores ? [stores as AimsStore] : [];
   }
 
   async getStore(): Promise<AimsStore | null> {
@@ -141,25 +144,15 @@ export class AimsClient {
     return stores[0] ?? null;
   }
 
-  private articleQuery(page?: number, pageSize?: number): Record<string, string | number | undefined> {
-    return {
-      ...(this.storeId ? { stationCode: this.storeId, storeId: this.storeId } : {}),
-      ...(page !== undefined ? { page } : {}),
-      ...(pageSize !== undefined ? { pageSize } : {}),
-    };
-  }
-
   async listProducts(page = 1, pageSize = 50): Promise<AimsListResponse<AimsProduct>> {
     return this.request<AimsListResponse<AimsProduct>>("/common/articles", {
-      query: this.articleQuery(page, pageSize),
-      skipStoreQuery: true,
+      query: { page, size: pageSize },
     });
   }
 
   async getProduct(articleId: string): Promise<AimsProduct> {
-    return this.request<AimsProduct>("/common/articles/id", {
-      query: { ...this.articleQuery(), id: articleId },
-      skipStoreQuery: true,
+    return this.request<AimsProduct>("/common/articles", {
+      query: { articleId },
     });
   }
 
@@ -167,7 +160,6 @@ export class AimsClient {
     return this.request<AimsProduct>("/common/articles", {
       method: "POST",
       body: payload,
-      skipStoreQuery: true,
     });
   }
 
@@ -175,7 +167,6 @@ export class AimsClient {
     return this.request<AimsProduct>("/common/articles", {
       method: "PUT",
       body: payload,
-      skipStoreQuery: true,
     });
   }
 
@@ -184,14 +175,12 @@ export class AimsClient {
       return await this.request("/common/articles", {
         method: "PUT",
         body: payload,
-        skipStoreQuery: true,
       });
     } catch (error) {
-      if (error instanceof AimsClientError && (error.status === 404 || error.status === 400)) {
+      if (error instanceof AimsClientError && (error.status === 404 || error.status === 400 || error.status === 405)) {
         return this.request("/common/articles", {
           method: "POST",
           body: payload,
-          skipStoreQuery: true,
         });
       }
       throw error;
@@ -203,20 +192,23 @@ export class AimsClient {
   }
 
   async listLabels(page = 1, pageSize = 50): Promise<AimsListResponse<AimsLabel>> {
-    return this.request<AimsListResponse<AimsLabel>>("/labels", {
-      query: { page, pageSize },
+    return this.request<AimsListResponse<AimsLabel>>("/common/labels", {
+      query: { page, size: pageSize },
     });
   }
 
   async assignLabel(payload: AssignLabelPayload): Promise<AimsLabel> {
-    return this.request<AimsLabel>("/labels/assign", {
+    return this.request<AimsLabel>("/common/labels/link", {
       method: "POST",
       body: payload,
     });
   }
 
   async refreshLabel(labelId: string): Promise<void> {
-    await this.request(`/labels/${labelId}/refresh`, { method: "POST" });
+    await this.request("/common/labels", {
+      method: "GET",
+      query: { label: labelId },
+    });
   }
 }
 
@@ -227,4 +219,9 @@ export function getAimsClient(): AimsClient {
     client = new AimsClient();
   }
   return client;
+}
+
+/** Reset singleton (tests / after env changes). */
+export function resetAimsClient(): void {
+  client = null;
 }

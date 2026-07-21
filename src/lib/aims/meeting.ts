@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { getEnv } from "@/lib/config";
 
 export const meetingDisplaySchema = z.object({
   roomId: z.string().min(1),
@@ -11,14 +10,15 @@ export const meetingDisplaySchema = z.object({
 
 export type MeetingDisplayInput = z.infer<typeof meetingDisplaySchema>;
 
-export type AimsMeetingArticlePayload = {
-  stationCode?: string;
-  dataList: Array<{
-    id: string;
-    name: string;
-    data: Record<string, string>;
-  }>;
-};
+/**
+ * AIMS SaaS Article upsert body.
+ * Fields inside `data` must match the store Product File Config / template fields.
+ */
+export type AimsMeetingArticlePayload = Array<{
+  articleId: string;
+  articleName: string;
+  data: Record<string, string>;
+}>;
 
 function formatAttendees(attendees: string[] | string): string {
   if (Array.isArray(attendees)) {
@@ -28,7 +28,6 @@ function formatAttendees(attendees: string[] | string): string {
 }
 
 export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArticlePayload {
-  const env = getEnv();
   const attendees = formatAttendees(input.attendees);
 
   const data: Record<string, string> = {
@@ -45,14 +44,11 @@ export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArt
     data.END_TIME = input.endTime;
   }
 
-  return {
-    ...(env.AIMS_STORE_ID ? { stationCode: env.AIMS_STORE_ID } : {}),
-    dataList: [
-      {
-        id: input.roomId,
-        name: input.meetingName,
-        data,
-      },
-    ],
-  };
+  return [
+    {
+      articleId: input.roomId,
+      articleName: input.meetingName,
+      data,
+    },
+  ];
 }
