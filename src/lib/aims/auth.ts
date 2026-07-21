@@ -125,10 +125,14 @@ async function postTokenRequest(path: string, body: Record<string, string>): Pro
 
 async function loginWithCredentials(): Promise<CachedToken> {
   const env = getEnv();
-  return postTokenRequest("/token", {
+  const body: Record<string, string> = {
     username: env.AIMS_USERNAME,
     password: env.AIMS_PASSWORD,
-  });
+  };
+  if (env.AIMS_COMPANY_CODE) {
+    body.companyCode = env.AIMS_COMPANY_CODE;
+  }
+  return postTokenRequest("/token", body);
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<CachedToken> {

@@ -96,7 +96,13 @@ export class AimsClient {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
         ...(this.tenantId ? { "X-Tenant-Id": this.tenantId } : {}),
-        ...(this.companyCode ? { "Company-Code": this.companyCode } : {}),
+        ...(this.companyCode
+          ? {
+              "Company-Code": this.companyCode,
+              companyCode: this.companyCode,
+              CustomerCode: this.companyCode,
+            }
+          : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
