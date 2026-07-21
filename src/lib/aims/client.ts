@@ -28,12 +28,23 @@ type AimsEnvelope<T> = {
 };
 
 function unwrapAimsResponse<T>(payload: unknown): T {
-  if (payload && typeof payload === "object" && "responseMessage" in payload) {
+  if (!payload || typeof payload !== "object") {
+    return payload as T;
+  }
+
+  // Labels/Store/Articles often return data beside a string responseMessage ("OK"/"SUCCESS").
+  if ("labelList" in payload || "stores" in payload || "articleList" in payload || "gatewayList" in payload) {
+    return payload as T;
+  }
+
+  if ("responseMessage" in payload) {
     const envelope = payload as AimsEnvelope<T>;
-    if (envelope.responseMessage !== undefined) {
+    // Only unwrap when responseMessage holds the actual data object.
+    if (envelope.responseMessage && typeof envelope.responseMessage === "object") {
       return envelope.responseMessage;
     }
   }
+
   return payload as T;
 }
 
