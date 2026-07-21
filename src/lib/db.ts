@@ -63,20 +63,104 @@ function resolveSsl(host: string): PoolOptions["ssl"] {
   return undefined;
 }
 
-function poolOptionsFromUrl(source: string, url: string): PoolOptions & { source: string } {
-  const parsed = new URL(url);
-  return {
-    source,
-    host: parsed.hostname,
-    port: Number(parsed.port || "3306"),
-    user: decodeURIComponent(parsed.username),
-    password: decodeURIComponent(parsed.password),
-    database: parsed.pathname.replace(/^\//, ""),
-    waitForConnections: true,
-    connectionLimit: 10,
-    connectTimeout: 15_000,
-    ssl: resolveSsl(parsed.hostname),
-  };
+function isResolvableUrl(value: string): boolean {
+  if (!value || value.includes("${{") || value.includes("{{")) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeMysqlUrl(url: string): string {
+  const trimmed = url.trim();
+  if (/^mysql2?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/^mysql2:\/\//i, "mysql://");
+  }
+  if (trimmed.includes("@")) {
+    return `mysql://${trimmed}`;
+  }
+  return trimmed;
+}
+
+function parseMysqlUrl(url: string): {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+} {
+  const normalized = normalizeMysqlUrl(url);
+
+  try {
+    const parsed = new URL(normalized);
+    const database = parsed.pathname.replace(/^\//, "");
+    if (!parsed.hostname || !database) {
+      throw new Error("Missing host or database in MySQL URL");
+    }
+    return {
+      host: parsed.hostname,
+      port: Number(parsed.port || "3306"),
+      user: decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+      database,
+    };
+  } catch {
+    const withoutProto = normalized.replace(/^mysql:\/\//i, "");
+    const atIdx = withoutProto.lastIndexOf("@");
+    if (atIdx < 0) {
+      throw new Error("Invalid MySQL URL");
+    }
+
+    const auth = withoutProto.slice(0, atIdx);
+    const hostPart = withoutProto.slice(atIdx + 1);
+    const slashIdx = hostPart.indexOf("/");
+    if (slashIdx < 0) {
+      throw new Error("Invalid MySQL URL");
+    }
+
+    const hostAndPort = hostPart.slice(0, slashIdx);
+    const database = hostPart.slice(slashIdx + 1);
+    const colonIdx = auth.indexOf(":");
+    if (colonIdx < 0) {
+      throw new Error("Invalid MySQL URL");
+    }
+
+    const [host, port = "3306"] = hostAndPort.includes(":")
+      ? [hostAndPort.slice(0, hostAndPort.lastIndexOf(":")), hostAndPort.slice(hostAndPort.lastIndexOf(":") + 1)]
+      : [hostAndPort, "3306"];
+
+    return {
+      host,
+      port: Number(port || "3306"),
+      user: decodeURIComponent(auth.slice(0, colonIdx)),
+      password: decodeURIComponent(auth.slice(colonIdx + 1)),
+      database: decodeURIComponent(database),
+    };
+  }
+}
+
+function poolOptionsFromUrl(source: string, url: string): (PoolOptions & { source: string }) | null {
+  if (!isResolvableUrl(url)) {
+    return null;
+  }
+
+  try {
+    const parsed = parseMysqlUrl(url);
+    return {
+      source,
+      host: parsed.host,
+      port: parsed.port,
+      user: parsed.user,
+      password: parsed.password,
+      database: parsed.database,
+      waitForConnections: true,
+      connectionLimit: 10,
+      connectTimeout: 15_000,
+      ssl: resolveSsl(parsed.host),
+    };
+  } catch (error) {
+    lastDatabaseError = `${source}: ${formatDbError(error)}`;
+    return null;
+  }
 }
 
 function poolOptionsFromEnvVars(): (PoolOptions & { source: string }) | null {
@@ -88,6 +172,10 @@ function poolOptionsFromEnvVars(): (PoolOptions & { source: string }) | null {
 
   if (!host || !user || !password || !database) {
     return null;
+  }
+
+  if (host.includes("://")) {
+    return poolOptionsFromUrl("MYSQLHOST", host);
   }
 
   return {
@@ -116,6 +204,7 @@ function getConnectionCandidates(): Array<PoolOptions & { source: string }> {
 
   for (const item of databaseUrlCandidates()) {
     const options = poolOptionsFromUrl(item.source, item.url);
+    if (!options) continue;
     const key = `${options.host}:${options.port}/${options.database}`;
     if (!seen.has(key)) {
       candidates.push(options);
@@ -125,7 +214,7 @@ function getConnectionCandidates(): Array<PoolOptions & { source: string }> {
 
   if (candidates.length === 0) {
     throw new Error(
-      "MySQL is not configured. Link Railway MySQL to this service or set MYSQL_URL.",
+      "MySQL is not configured. Link Railway MySQL to this service or set MYSQLHOST/MYSQLUSER/MYSQLPASSWORD/MYSQLDATABASE.",
     );
   }
 
