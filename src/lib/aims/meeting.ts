@@ -5,6 +5,8 @@ export const meetingDisplaySchema = z.object({
   meetingName: z.string().min(1),
   attendees: z.union([z.array(z.string().min(1)), z.string().min(1)]),
   organizerName: z.string().min(1),
+  /** Preserve AIMS Product Name (e.g. 명패1). Defaults to roomId. */
+  articleName: z.string().min(1).optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
 });
@@ -30,6 +32,7 @@ function formatAttendees(attendees: string[] | string): string {
 
 export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArticlePayload {
   const attendees = formatAttendees(input.attendees);
+  const articleName = input.articleName?.trim() || input.roomId;
 
   const data: Record<string, string> = {
     ARTICLE_ID: input.roomId,
@@ -49,8 +52,7 @@ export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArt
   return [
     {
       articleId: input.roomId,
-      // Keep AIMS product name (e.g. 명패2); meeting title goes in data fields only.
-      articleName: input.roomId,
+      articleName,
       data,
     },
   ];

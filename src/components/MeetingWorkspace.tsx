@@ -40,21 +40,20 @@ const emptyForm = {
   attendees: "",
 };
 
-/** articleId/articleName 기준으로 "2(명패2)" 형식 */
+/** articleId + Product Name → "1(명패1)" */
 function formatArticleCell(articleId: string, articleName?: string): string {
   const id = articleId.trim();
   const name = articleName?.trim() ?? "";
 
-  for (const value of [id, name]) {
-    const match = value.match(/^명패(\d+)$/);
-    if (match) {
-      return `${match[1]}(${value})`;
-    }
-  }
-
   if (name && name !== id) {
     return `${id}(${name})`;
   }
+
+  const match = id.match(/^명패(\d+)$/);
+  if (match) {
+    return `${match[1]}(${id})`;
+  }
+
   return id;
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AimsClientError } from "@/lib/aims/client";
+import { listSeatLabels } from "@/lib/aims/labels";
 import { syncMeetingDisplay } from "@/lib/aims/sync";
 import { isAimsConfigured } from "@/lib/config";
 import { getMeeting, updateMeeting } from "@/lib/meetings-store";
@@ -30,10 +31,18 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   try {
+    const { labels } = await listSeatLabels();
+    const articleNameById = new Map(
+      labels
+        .filter((l) => l.articleId)
+        .map((l) => [l.articleId, l.articleName?.trim() || l.articleId] as const),
+    );
+
     const results = [];
     for (const seat of seats) {
       const result = await syncMeetingDisplay({
         roomId: seat.articleId,
+        articleName: articleNameById.get(seat.articleId) || seat.articleId,
         meetingName: meeting.meetingName,
         attendees: [seat.attendeeName],
         organizerName: meeting.organizerName,
