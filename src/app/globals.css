@@ -669,6 +669,46 @@ select {
   margin: 0 0 0.85rem;
 }
 
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(11, 27, 51, 0.45);
+}
+
+.confirm-dialog {
+  width: min(100%, 360px);
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(11, 27, 51, 0.18);
+}
+
+.confirm-dialog h2 {
+  margin: 0 0 0.55rem;
+  font-size: 1rem;
+  color: var(--navy);
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+}
+
 @media (max-width: 900px) {
   .aims-shell {
     grid-template-columns: 1fr;

@@ -69,6 +69,12 @@ export function MeetingWorkspace() {
   const [pending, startTransition] = useTransition();
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<MainTab>("meeting");
+  const [cancelConfirm, setCancelConfirm] = useState<{
+    kind: "one" | "all";
+    labelCode?: string;
+    title: string;
+    message: string;
+  } | null>(null);
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   function scrollTable(direction: "left" | "right") {
@@ -274,7 +280,7 @@ export function MeetingWorkspace() {
     });
   }
 
-  async function onCancelOne(labelCode: string) {
+  async function executeCancelOne(labelCode: string) {
     if (!activeId) return;
     const attendeeName = seatPick[labelCode]?.trim() ?? "";
     const fromSaved = activeMeeting?.seats.find((s) => s.labelCode === labelCode);
@@ -321,14 +327,38 @@ export function MeetingWorkspace() {
     });
   }
 
-  async function onCancelAll() {
+  function onCancelOne(labelCode: string) {
+    if (!activeId) return;
+    const attendeeName =
+      seatPick[labelCode]?.trim() ||
+      activeMeeting?.seats.find((s) => s.labelCode === labelCode)?.attendeeName ||
+      "";
+    const label = labels.find((l) => l.labelCode === labelCode);
+    const hasSeat =
+      Boolean(seatPick[labelCode]) ||
+      Boolean(activeMeeting?.seats.some((s) => s.labelCode === labelCode));
+
+    if (!hasSeat || !label?.articleId) {
+      setError("취소할 할당이 없습니다.");
+      return;
+    }
+
+    const article = formatArticleCell(label.articleId, label.articleName);
+    setCancelConfirm({
+      kind: "one",
+      labelCode,
+      title: "할당 취소",
+      message: attendeeName
+        ? `${attendeeName} (${article}) 할당을 취소할까요?`
+        : `${article} 할당을 취소할까요?`,
+    });
+  }
+
+  async function executeCancelAll() {
     if (!activeId) return;
     const seats = seatsForClear();
     if (seats.length === 0) {
       setError("취소할 할당이 없습니다.");
-      return;
-    }
-    if (!window.confirm(`배정된 명패 ${seats.length}건의 할당을 모두 취소할까요?`)) {
       return;
     }
 
@@ -351,6 +381,33 @@ export function MeetingWorkspace() {
         await loadAll();
       }
     });
+  }
+
+  function onCancelAll() {
+    if (!activeId) return;
+    const seats = seatsForClear();
+    if (seats.length === 0) {
+      setError("취소할 할당이 없습니다.");
+      return;
+    }
+    setCancelConfirm({
+      kind: "all",
+      title: "전체 할당 취소",
+      message: `배정된 명패 ${seats.length}건의 할당을 모두 취소할까요?`,
+    });
+  }
+
+  function confirmCancelDialog() {
+    if (!cancelConfirm) return;
+    const pendingConfirm = cancelConfirm;
+    setCancelConfirm(null);
+    if (pendingConfirm.kind === "one" && pendingConfirm.labelCode) {
+      void executeCancelOne(pendingConfirm.labelCode);
+      return;
+    }
+    if (pendingConfirm.kind === "all") {
+      void executeCancelAll();
+    }
   }
 
   async function onDelete(id: string) {
@@ -688,6 +745,44 @@ export function MeetingWorkspace() {
           </div>
         </div>
       </div>
+
+      {cancelConfirm ? (
+        <div
+          className="confirm-backdrop"
+          role="presentation"
+          onClick={() => setCancelConfirm(null)}
+        >
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cancel-confirm-title"
+            aria-describedby="cancel-confirm-message"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="cancel-confirm-title">{cancelConfirm.title}</h2>
+            <p id="cancel-confirm-message">{cancelConfirm.message}</p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="btn-navy"
+                onClick={confirmCancelDialog}
+                disabled={pending}
+              >
+                확인
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setCancelConfirm(null)}
+                disabled={pending}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
