@@ -40,13 +40,22 @@ const emptyForm = {
   attendees: "",
 };
 
-/** 명패2 → "2(명패2)" */
-function formatArticleCell(articleId: string): string {
-  const match = articleId.trim().match(/^명패(\d+)$/);
-  if (match) {
-    return `${match[1]}(${articleId.trim()})`;
+/** articleId/articleName 기준으로 "2(명패2)" 형식 */
+function formatArticleCell(articleId: string, articleName?: string): string {
+  const id = articleId.trim();
+  const name = articleName?.trim() ?? "";
+
+  for (const value of [id, name]) {
+    const match = value.match(/^명패(\d+)$/);
+    if (match) {
+      return `${match[1]}(${value})`;
+    }
   }
-  return articleId;
+
+  if (name && name !== id) {
+    return `${id}(${name})`;
+  }
+  return id;
 }
 
 export function MeetingWorkspace() {
@@ -426,24 +435,6 @@ export function MeetingWorkspace() {
                     <span>명패 수</span>
                     <input value={`${labels.length}개`} readOnly />
                   </label>
-                  <div className="aims-filter-actions">
-                    <button
-                      type="button"
-                      className="btn-navy"
-                      disabled={pending}
-                      onClick={() => startTransition(() => loadAll())}
-                    >
-                      찾기
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-navy"
-                      disabled={pending}
-                      onClick={() => startTransition(() => loadAll())}
-                    >
-                      Clear
-                    </button>
-                  </div>
                 </div>
 
                 {!activeMeeting ? (
@@ -468,7 +459,6 @@ export function MeetingWorkspace() {
                             <td>{index + 1}</td>
                             <td>
                               <p className="seat-code">{label.labelCode}</p>
-                              {label.type ? <p className="seat-meta">{label.type}</p> : null}
                             </td>
                             <td>
                               <span className={label.online ? "dot on" : "dot off"} />
@@ -477,7 +467,7 @@ export function MeetingWorkspace() {
                             </td>
                             <td>
                               {label.articleId ? (
-                                <div>{formatArticleCell(label.articleId)}</div>
+                                <div>{formatArticleCell(label.articleId, label.articleName)}</div>
                               ) : (
                                 <span style={{ color: "var(--danger)" }}>Article 없음</span>
                               )}

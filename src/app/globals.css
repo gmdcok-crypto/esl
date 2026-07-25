@@ -604,16 +604,19 @@ select {
   padding: 0;
   display: grid;
   gap: 0.4rem;
+  max-width: 50%;
 }
 
 .meeting-mini-list li {
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  width: 100%;
 }
 
 .meeting-chip {
   flex: 1;
+  min-width: 0;
   text-align: left;
   border: 1px solid var(--line);
   background: #fff;
@@ -621,6 +624,9 @@ select {
   border-radius: 2px;
   padding: 0.55rem 0.7rem;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meeting-chip.active {

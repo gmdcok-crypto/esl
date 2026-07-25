@@ -49,7 +49,8 @@ export function toAimsMeetingArticle(input: MeetingDisplayInput): AimsMeetingArt
   return [
     {
       articleId: input.roomId,
-      articleName: input.meetingName,
+      // Keep AIMS product name (e.g. 명패2); meeting title goes in data fields only.
+      articleName: input.roomId,
       data,
     },
   ];
