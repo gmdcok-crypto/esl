@@ -1,15 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Syne } from "next/font/google";
+import { Manrope, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
 const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-display",
 });
 
-const syne = Syne({
+const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
-  variable: "--font-display",
+  weight: ["400", "500", "700", "900"],
+  variable: "--font-body",
 });
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0c1412",
+  themeColor: "#0b1b33",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -42,7 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${manrope.variable} ${syne.variable}`}>
+      <body className={`${manrope.variable} ${notoSansKr.variable}`}>
         {children}
         <script
           dangerouslySetInnerHTML={{

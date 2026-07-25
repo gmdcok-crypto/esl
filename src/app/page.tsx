@@ -6,7 +6,7 @@ export default function HomePage() {
       <div className="landing-atmosphere" aria-hidden />
       <header className="landing-nav">
         <span className="brand-mark">명패</span>
-        <Link className="btn-ghost" href="/login">
+        <Link className="btn-ghost" href="/login" style={{ borderColor: "rgba(255,255,255,0.35)", color: "#fff" }}>
           로그인
         </Link>
       </header>

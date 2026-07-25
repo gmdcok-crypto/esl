@@ -32,6 +32,8 @@ type SeatLabel = {
   type?: string;
 };
 
+type MainTab = "meeting" | "assign";
+
 const emptyForm = {
   meetingName: "",
   organizerName: "",
@@ -49,6 +51,7 @@ export function MeetingWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [ready, setReady] = useState(false);
+  const [tab, setTab] = useState<MainTab>("assign");
 
   const activeMeeting = useMemo(
     () => meetings.find((m) => m.id === activeId) ?? null,
@@ -125,32 +128,40 @@ export function MeetingWorkspace() {
     setSeatPick({});
   }
 
-  async function onSaveMeeting(event: FormEvent) {
-    event.preventDefault();
+  async function saveMeeting() {
     setError(null);
     setMessage(null);
+    const payload = {
+      meetingName: form.meetingName.trim(),
+      organizerName: form.organizerName.trim(),
+      attendees: form.attendees,
+    };
+    if (!payload.meetingName || !payload.organizerName || !payload.attendees.trim()) {
+      throw new Error("회의명, 주관기관, 참석자명단을 입력하세요.");
+    }
+    if (activeId) {
+      await apiFetch(`/api/meetings/${activeId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setMessage("회의 정보가 저장되었습니다.");
+    } else {
+      const created = await apiFetch<{ meeting: Meeting }>("/api/meetings", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setActiveId(created.meeting.id);
+      setMessage("회의가 등록되었습니다. 명패에 참석자를 배정하세요.");
+      setTab("assign");
+    }
+    await loadAll();
+  }
+
+  async function onSaveMeeting(event: FormEvent) {
+    event.preventDefault();
     startTransition(async () => {
       try {
-        const payload = {
-          meetingName: form.meetingName.trim(),
-          organizerName: form.organizerName.trim(),
-          attendees: form.attendees,
-        };
-        if (activeId) {
-          await apiFetch(`/api/meetings/${activeId}`, {
-            method: "PUT",
-            body: JSON.stringify(payload),
-          });
-          setMessage("회의 정보가 저장되었습니다.");
-        } else {
-          const created = await apiFetch<{ meeting: Meeting }>("/api/meetings", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-          setActiveId(created.meeting.id);
-          setMessage("회의가 등록되었습니다. 명패에 참석자를 배정하세요.");
-        }
-        await loadAll();
+        await saveMeeting();
       } catch (err) {
         setError(err instanceof Error ? err.message : "저장 실패");
       }
@@ -228,148 +239,354 @@ export function MeetingWorkspace() {
   }
 
   return (
-    <div className="workspace">
-      <header className="workspace-top">
-        <div>
-          <p className="eyebrow">Seat Nameplates</p>
-          <h1>좌석 명패 배정</h1>
-        </div>
-        <button type="button" className="btn-ghost" onClick={logout}>
-          로그아웃
-        </button>
-      </header>
-
-      <div className="workspace-grid seat-layout">
-        <section className="panel compose" aria-labelledby="compose-title">
-          <h2 id="compose-title">{activeId ? "회의 정보" : "새 회의"}</h2>
-          <p className="panel-lead">회의명·주관기관·참석자 명단을 만든 뒤, 오른쪽에서 명패에 배정합니다.</p>
-
-          <form className="compose-form" onSubmit={onSaveMeeting}>
-            <label>
-              <span>회의명</span>
-              <input
-                value={form.meetingName}
-                onChange={(e) => setForm((f) => ({ ...f, meetingName: e.target.value }))}
-                required
-                placeholder="바이브코딩 심포지엄"
-              />
-            </label>
-            <label>
-              <span>주관기관</span>
-              <input
-                value={form.organizerName}
-                onChange={(e) => setForm((f) => ({ ...f, organizerName: e.target.value }))}
-                required
-                placeholder="블루컴"
-              />
-            </label>
-            <label>
-              <span>참석자 명단 (콤보용)</span>
-              <textarea
-                value={form.attendees}
-                onChange={(e) => setForm((f) => ({ ...f, attendees: e.target.value }))}
-                required
-                rows={4}
-                placeholder="김혜란, 홍길동, 이영희"
-              />
-            </label>
-
-            <div className="compose-actions">
-              <button className="btn-primary" type="submit" disabled={pending}>
-                회의 저장
-              </button>
-              <button type="button" className="btn-ghost" onClick={resetForm}>
-                새 회의
-              </button>
-            </div>
-          </form>
-
-          <div className="meeting-switch">
-            <p className="switch-label">저장된 회의</p>
-            <ul className="meeting-mini-list">
-              {meetings.map((meeting) => (
-                <li key={meeting.id}>
+    <div className="aims-shell">
+      <aside className="aims-sidebar" aria-label="주 메뉴">
+        <div className="aims-logo">명패 SaaS</div>
+        <div className="aims-nav">
+          <div className="aims-rail" aria-hidden>
+            <span>ESL</span>
+            <span>CONFIG</span>
+          </div>
+          <nav className="aims-menu">
+            <div className="aims-menu-group">
+              <div className="aims-menu-title">
+                Label
+                <span className="chev">▾</span>
+              </div>
+              <ul className="aims-submenu">
+                <li>
                   <button
                     type="button"
-                    className={`meeting-chip ${activeId === meeting.id ? "active" : ""}`}
-                    onClick={() => setActiveId(meeting.id)}
+                    className={`aims-menu-item ${tab === "meeting" ? "active" : ""}`}
+                    onClick={() => setTab("meeting")}
                   >
-                    {meeting.meetingName}
-                  </button>
-                  <button type="button" className="btn-ghost danger tiny" onClick={() => onDelete(meeting.id)}>
-                    삭제
+                    회의 설정
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
-
-          {message ? <p className="form-ok">{message}</p> : null}
-          {error ? <p className="form-error">{error}</p> : null}
-        </section>
-
-        <section className="panel board" aria-labelledby="board-title">
-          <div className="board-head">
-            <div>
-              <h2 id="board-title">등록된 명패</h2>
-              <p className="panel-lead tight">명패마다 참석자를 콤보에서 선택합니다.</p>
+                <li>
+                  <button
+                    type="button"
+                    className={`aims-menu-item ${tab === "assign" ? "active" : ""}`}
+                    onClick={() => setTab("assign")}
+                  >
+                    명패 배정
+                  </button>
+                </li>
+              </ul>
             </div>
-            <span className="count">{labels.length}</span>
+            <div className="aims-menu-group">
+              <div className="aims-menu-title">
+                상품
+                <span className="chev">▾</span>
+              </div>
+            </div>
+            <div className="aims-menu-group">
+              <div className="aims-menu-title">
+                Gateway
+                <span className="chev">▾</span>
+              </div>
+            </div>
+            <div className="aims-menu-group">
+              <div className="aims-menu-title">
+                Template
+                <span className="chev">▾</span>
+              </div>
+            </div>
+          </nav>
+        </div>
+      </aside>
+
+      <div className="aims-main">
+        <header className="aims-topbar">
+          <div className="aims-store-search" aria-hidden>
+            <span>⌕</span>
+            <span>매장을 선택하세요</span>
+          </div>
+          <p className="aims-store-path">BLU · 전자명패 운영</p>
+          <div className="aims-top-actions">
+            <span style={{ color: "var(--muted)", fontSize: "0.84rem" }}>한국어</span>
+            <button type="button" className="btn-ghost tiny" onClick={logout}>
+              로그아웃
+            </button>
+            <span className="aims-avatar" aria-hidden>
+              M
+            </span>
+          </div>
+        </header>
+
+        <div className="aims-content">
+          <h1 className="aims-page-title">
+            <span aria-hidden>▦</span>
+            Seat Nameplates
+          </h1>
+
+          <div className="aims-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "assign"}
+              className={`aims-tab ${tab === "assign" ? "active" : ""}`}
+              onClick={() => setTab("assign")}
+            >
+              LABEL ASSIGN
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "meeting"}
+              className={`aims-tab ${tab === "meeting" ? "active" : ""}`}
+              onClick={() => setTab("meeting")}
+            >
+              MEETING SETUP
+            </button>
           </div>
 
-          {!activeMeeting ? (
-            <p className="empty">왼쪽에서 회의를 먼저 저장하세요.</p>
-          ) : labels.length === 0 ? (
-            <p className="empty">AIMS에 등록된 명패가 없습니다.</p>
-          ) : (
-            <ul className="seat-list">
-              {labels.map((label) => (
-                <li key={label.labelCode} className="seat-row">
-                  <div className="seat-info">
-                    <p className="seat-code">{label.labelCode}</p>
-                    <p className="seat-meta">
-                      <span className={label.online ? "dot on" : "dot off"} />
-                      {label.online ? "Online" : "Offline"}
-                      {label.articleId ? ` · Article ${label.articleId}` : " · Article 없음"}
-                      {label.battery ? ` · ${label.battery}` : ""}
-                    </p>
-                    {label.articleName ? <p className="seat-article">{label.articleName}</p> : null}
-                  </div>
+          <div className="aims-panel">
+            {message || error ? (
+              <div className="flash-row">
+                {message ? <p className="form-ok">{message}</p> : null}
+                {error ? <p className="form-error">{error}</p> : null}
+              </div>
+            ) : null}
 
-                  <label className="seat-combo">
-                    <span>참석자</span>
-                    <select
-                      value={seatPick[label.labelCode] ?? ""}
-                      disabled={!label.articleId || attendeeOptions.length === 0}
-                      onChange={(e) =>
-                        setSeatPick((prev) => ({ ...prev, [label.labelCode]: e.target.value }))
+            {tab === "meeting" ? (
+              <>
+                <div className="aims-filter">
+                  <label className="aims-field">
+                    <span>회의명</span>
+                    <input
+                      value={form.meetingName}
+                      onChange={(e) => setForm((f) => ({ ...f, meetingName: e.target.value }))}
+                      placeholder="바이브코딩 심포지엄"
+                    />
+                  </label>
+                  <label className="aims-field">
+                    <span>주관기관</span>
+                    <input
+                      value={form.organizerName}
+                      onChange={(e) => setForm((f) => ({ ...f, organizerName: e.target.value }))}
+                      placeholder="블루컴"
+                    />
+                  </label>
+                  <div className="aims-filter-actions">
+                    <button
+                      type="button"
+                      className="btn-navy"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          try {
+                            await saveMeeting();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "저장 실패");
+                          }
+                        })
                       }
                     >
-                      <option value="">선택</option>
-                      {attendeeOptions.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
+                      저장
+                    </button>
+                    <button type="button" className="btn-navy" onClick={resetForm}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <form className="compose-form" onSubmit={onSaveMeeting}>
+                  <label>
+                    <span>참석자명단 (쉼표로 구분)</span>
+                    <textarea
+                      value={form.attendees}
+                      onChange={(e) => setForm((f) => ({ ...f, attendees: e.target.value }))}
+                      required
+                      rows={4}
+                      placeholder="김혜란, 홍길동, 이영희"
+                    />
+                  </label>
+                  <div className="aims-actions">
+                    <button className="btn-navy" type="submit" disabled={pending}>
+                      회의 저장
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={resetForm}>
+                      새 회의
+                    </button>
+                  </div>
+                </form>
+
+                <div style={{ marginTop: "1.25rem" }}>
+                  <p className="switch-label" style={{ margin: "0 0 0.55rem", color: "var(--muted)", fontSize: "0.82rem", fontWeight: 700 }}>
+                    저장된 회의
+                  </p>
+                  {meetings.length === 0 ? (
+                    <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
+                  ) : (
+                    <ul className="meeting-mini-list">
+                      {meetings.map((meeting) => (
+                        <li key={meeting.id}>
+                          <button
+                            type="button"
+                            className={`meeting-chip ${activeId === meeting.id ? "active" : ""}`}
+                            onClick={() => {
+                              setActiveId(meeting.id);
+                              setTab("assign");
+                            }}
+                          >
+                            {meeting.meetingName}
+                            {meeting.lastPushStatus ? ` · ${meeting.lastPushStatus}` : ""}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost danger tiny"
+                            onClick={() => onDelete(meeting.id)}
+                          >
+                            삭제
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="aims-filter">
+                  <label className="aims-field">
+                    <span>선택 회의</span>
+                    <select
+                      value={activeId ?? ""}
+                      onChange={(e) => setActiveId(e.target.value || null)}
+                    >
+                      <option value="">회의 선택</option>
+                      {meetings.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.meetingName}
                         </option>
                       ))}
                     </select>
                   </label>
-                </li>
-              ))}
-            </ul>
-          )}
+                  <label className="aims-field">
+                    <span>명패 수</span>
+                    <input value={`${labels.length}개`} readOnly />
+                  </label>
+                  <div className="aims-filter-actions">
+                    <button
+                      type="button"
+                      className="btn-navy"
+                      disabled={pending}
+                      onClick={() => startTransition(() => loadAll())}
+                    >
+                      찾기
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-navy"
+                      disabled={pending}
+                      onClick={() => startTransition(() => loadAll())}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
 
-          <div className="compose-actions seat-actions">
-            <button type="button" className="btn-ghost" onClick={() => startTransition(() => loadAll())} disabled={pending}>
-              명패 새로고침
-            </button>
-            <button type="button" className="btn-ghost" onClick={onSaveSeats} disabled={pending || !activeId}>
-              배정 저장
-            </button>
-            <button type="button" className="btn-primary" onClick={onPush} disabled={pending || !activeId}>
-              ESL 일괄 전송
-            </button>
+                {!activeMeeting ? (
+                  <p className="aims-empty-banner">회의를 먼저 선택하거나 MEETING SETUP에서 저장하세요.</p>
+                ) : labels.length === 0 ? (
+                  <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
+                ) : (
+                  <div className="aims-table-wrap">
+                    <table className="aims-table" aria-label="등록된 명패 목록">
+                      <thead>
+                        <tr>
+                          <th style={{ width: "3rem" }}>#</th>
+                          <th>LABEL CODE</th>
+                          <th>STATUS</th>
+                          <th>ARTICLE</th>
+                          <th>참석자</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {labels.map((label, index) => (
+                          <tr key={label.labelCode}>
+                            <td>{index + 1}</td>
+                            <td>
+                              <p className="seat-code">{label.labelCode}</p>
+                              {label.type ? <p className="seat-meta">{label.type}</p> : null}
+                            </td>
+                            <td>
+                              <span className={label.online ? "dot on" : "dot off"} />
+                              {label.online ? "Online" : "Offline"}
+                              {label.battery ? ` · ${label.battery}` : ""}
+                            </td>
+                            <td>
+                              {label.articleId ? (
+                                <>
+                                  <div>{label.articleId}</div>
+                                  {label.articleName ? (
+                                    <p className="seat-article">{label.articleName}</p>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <span style={{ color: "var(--danger)" }}>Article 없음</span>
+                              )}
+                            </td>
+                            <td>
+                              <label className="seat-combo">
+                                <span>참석자</span>
+                                <select
+                                  value={seatPick[label.labelCode] ?? ""}
+                                  disabled={!label.articleId || attendeeOptions.length === 0}
+                                  onChange={(e) =>
+                                    setSeatPick((prev) => ({
+                                      ...prev,
+                                      [label.labelCode]: e.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">선택</option>
+                                  {attendeeOptions.map((name) => (
+                                    <option key={name} value={name}>
+                                      {name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="aims-actions">
+                  <button
+                    type="button"
+                    className="btn-navy"
+                    onClick={() => startTransition(() => loadAll())}
+                    disabled={pending}
+                  >
+                    명패 새로고침
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-navy"
+                    onClick={onSaveSeats}
+                    disabled={pending || !activeId}
+                  >
+                    Assign
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-navy"
+                    onClick={onPush}
+                    disabled={pending || !activeId}
+                  >
+                    ESL 일괄 전송
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );
