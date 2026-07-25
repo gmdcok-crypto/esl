@@ -283,11 +283,6 @@ export function MeetingWorkspace() {
 
       <div className="aims-main">
         <div className="aims-content">
-          <h1 className="aims-page-title">
-            <span aria-hidden>▦</span>
-            Seat Nameplates
-          </h1>
-
           <div className="aims-tabs" role="tablist">
             <button
               type="button"

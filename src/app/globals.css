@@ -438,17 +438,6 @@ select {
   flex: 1;
 }
 
-.aims-page-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0 0 0.95rem;
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--navy);
-  letter-spacing: -0.02em;
-}
-
 .aims-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
