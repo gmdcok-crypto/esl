@@ -555,7 +555,6 @@ export function MeetingWorkspace() {
                             className={`meeting-chip ${activeId === meeting.id ? "active" : ""}`}
                             onClick={() => {
                               setActiveId(meeting.id);
-                              setTab("assign");
                             }}
                           >
                             {meeting.meetingName}
