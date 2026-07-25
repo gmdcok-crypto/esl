@@ -336,27 +336,6 @@ export function MeetingWorkspace() {
                       placeholder="블루컴"
                     />
                   </label>
-                  <div className="aims-filter-actions">
-                    <button
-                      type="button"
-                      className="btn-navy"
-                      disabled={pending}
-                      onClick={() =>
-                        startTransition(async () => {
-                          try {
-                            await saveMeeting();
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : "저장 실패");
-                          }
-                        })
-                      }
-                    >
-                      저장
-                    </button>
-                    <button type="button" className="btn-navy" onClick={resetForm}>
-                      Clear
-                    </button>
-                  </div>
                 </div>
 
                 <form className="compose-form" onSubmit={onSaveMeeting}>
