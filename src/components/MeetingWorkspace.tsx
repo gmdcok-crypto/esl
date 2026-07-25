@@ -196,20 +196,6 @@ export function MeetingWorkspace() {
     return seats.length;
   }
 
-  async function onSaveSeats() {
-    setError(null);
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const count = await persistSeats();
-        setMessage(`좌석 배정 ${count}건 저장.`);
-        await loadAll();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "배정 저장 실패");
-      }
-    });
-  }
-
   async function onPush() {
     if (!activeId) return;
     setError(null);
@@ -273,7 +259,7 @@ export function MeetingWorkspace() {
                   className={`aims-menu-item ${tab === "assign" ? "active" : ""}`}
                   onClick={() => setTab("assign")}
                 >
-                  태그할당
+                  명패할당
                 </button>
               </li>
             </ul>
@@ -310,7 +296,7 @@ export function MeetingWorkspace() {
               className={`aims-tab ${tab === "assign" ? "active" : ""}`}
               onClick={() => setTab("assign")}
             >
-              태그할당
+              명패할당
             </button>
           </div>
 
@@ -533,14 +519,6 @@ export function MeetingWorkspace() {
                     disabled={pending}
                   >
                     명패 새로고침
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-navy"
-                    onClick={onSaveSeats}
-                    disabled={pending || !activeId}
-                  >
-                    Assign
                   </button>
                   <button
                     type="button"
