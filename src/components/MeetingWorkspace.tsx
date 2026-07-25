@@ -75,6 +75,12 @@ export function MeetingWorkspace() {
     title: string;
     message: string;
   } | null>(null);
+  const [preview, setPreview] = useState<{
+    articleLabel: string;
+    meetingName: string;
+    attendeeName: string;
+    organizerName: string;
+  } | null>(null);
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   function scrollTable(direction: "left" | "right") {
@@ -419,6 +425,28 @@ export function MeetingWorkspace() {
     });
   }
 
+  function openPreview(labelCode: string) {
+    if (!activeMeeting) {
+      setError("회의를 먼저 선택하세요.");
+      return;
+    }
+    const label = labels.find((l) => l.labelCode === labelCode);
+    if (!label?.articleId) {
+      setError("미리볼 Article이 없습니다.");
+      return;
+    }
+    const attendeeName =
+      seatPick[labelCode]?.trim() ||
+      activeMeeting.seats.find((s) => s.labelCode === labelCode)?.attendeeName ||
+      "";
+    setPreview({
+      articleLabel: formatArticleCell(label.articleId, label.articleName),
+      meetingName: activeMeeting.meetingName,
+      attendeeName,
+      organizerName: activeMeeting.organizerName,
+    });
+  }
+
   function logout() {
     clearStoredToken();
     router.replace("/login");
@@ -688,6 +716,14 @@ export function MeetingWorkspace() {
                                     </label>
                                     <button
                                       type="button"
+                                      className="btn-ghost tiny"
+                                      disabled={!label.articleId}
+                                      onClick={() => openPreview(label.labelCode)}
+                                    >
+                                      미리보기
+                                    </button>
+                                    <button
+                                      type="button"
                                       className="btn-navy tiny"
                                       disabled={!canAssign}
                                       onClick={() => onAssignOne(label.labelCode)}
@@ -777,6 +813,40 @@ export function MeetingWorkspace() {
                 disabled={pending}
               >
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div
+          className="confirm-backdrop"
+          role="presentation"
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="preview-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="preview-title">명패 미리보기</h2>
+            <p className="preview-meta">{preview.articleLabel}</p>
+            <div className="esl-preview" aria-label="전자명패 미리보기">
+              <p className="esl-preview-meeting">{preview.meetingName || "회의명"}</p>
+              <p className="esl-preview-attendee">
+                {preview.attendeeName || "참석자 미배정"}
+              </p>
+              <p className="esl-preview-organizer">
+                {preview.organizerName || "주관기관"}
+              </p>
+            </div>
+            <p className="preview-note">전송 예정 내용 미리보기입니다. 실물 화면과 다를 수 있습니다.</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn-navy" onClick={() => setPreview(null)}>
+                닫기
               </button>
             </div>
           </div>
