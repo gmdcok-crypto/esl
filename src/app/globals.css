@@ -110,60 +110,16 @@ select {
   white-space: nowrap;
 }
 
-.attendee-assign-block {
-  margin: 0 0 1rem;
-  padding: 0.85rem 0.9rem;
-  border: 1px solid var(--line);
-  background: #fff;
-}
-
-.attendee-assign-head {
+.seat-row-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.65rem;
+  gap: 0.4rem;
 }
 
-.attendee-assign-title {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.attendee-assign-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.45rem;
-}
-
-.attendee-assign-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: center;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid var(--line);
-  background: #fafbfd;
-}
-
-.attendee-assign-name {
-  min-width: 5.5rem;
-  flex: 0 1 8rem;
-  font-weight: 700;
-}
-
-.attendee-label-pick {
-  flex: 1 1 12rem;
-  min-width: 10rem;
-}
-
-.attendee-label-pick span {
-  display: none;
+.seat-row-actions .seat-combo {
+  flex: 1 1 8rem;
+  min-width: 7rem;
 }
 
 /* —— Landing —— */

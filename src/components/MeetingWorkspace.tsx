@@ -215,24 +215,10 @@ export function MeetingWorkspace() {
     return seats.length;
   }
 
-  function labelCodeForAttendee(attendeeName: string): string {
-    const found = Object.entries(seatPick).find(([, name]) => name === attendeeName);
-    return found?.[0] ?? "";
-  }
-
-  function assignAttendeeToLabel(attendeeName: string, labelCode: string) {
-    setSeatPick((prev) => {
-      const next: Record<string, string> = {};
-      for (const [code, name] of Object.entries(prev)) {
-        if (name !== attendeeName && code !== labelCode) {
-          next[code] = name;
-        }
-      }
-      if (labelCode) {
-        next[labelCode] = attendeeName;
-      }
-      return next;
-    });
+  function seatsForClear(): SeatAssignment[] {
+    const fromPick = currentSeatAssignments();
+    if (fromPick.length > 0) return fromPick;
+    return activeMeeting?.seats.filter((s) => s.articleId && s.attendeeName) ?? [];
   }
 
   async function onPush() {
@@ -255,16 +241,16 @@ export function MeetingWorkspace() {
     });
   }
 
-  async function onAssignOne(attendeeName: string) {
+  async function onAssignOne(labelCode: string) {
     if (!activeId) return;
-    const labelCode = labelCodeForAttendee(attendeeName);
-    if (!labelCode) {
-      setError(`${attendeeName}: 할당할 명패를 먼저 선택하세요.`);
+    const attendeeName = seatPick[labelCode]?.trim() ?? "";
+    if (!attendeeName) {
+      setError("참석자를 선택한 뒤 할당하세요.");
       return;
     }
     const label = labels.find((l) => l.labelCode === labelCode);
     if (!label?.articleId) {
-      setError(`${attendeeName}: 선택한 명패에 Article이 없습니다.`);
+      setError("해당 명패에 Article이 없습니다.");
       return;
     }
 
@@ -288,37 +274,24 @@ export function MeetingWorkspace() {
     });
   }
 
-  function seatsForClear(): SeatAssignment[] {
-    const fromPick = currentSeatAssignments();
-    if (fromPick.length > 0) return fromPick;
-    return activeMeeting?.seats.filter((s) => s.articleId && s.attendeeName) ?? [];
-  }
-
-  async function onCancelOne(attendeeName: string) {
+  async function onCancelOne(labelCode: string) {
     if (!activeId) return;
-    const labelCode = labelCodeForAttendee(attendeeName);
-    const fromSaved = activeMeeting?.seats.find((s) => s.attendeeName === attendeeName);
-    const targetCode = labelCode || fromSaved?.labelCode || "";
-    if (!targetCode) {
-      setError(`${attendeeName}: 취소할 할당이 없습니다.`);
-      return;
-    }
+    const attendeeName = seatPick[labelCode]?.trim() ?? "";
+    const fromSaved = activeMeeting?.seats.find((s) => s.labelCode === labelCode);
+    const label = labels.find((l) => l.labelCode === labelCode);
 
-    const seats = seatsForClear().filter((s) => s.labelCode === targetCode);
-    let seat = seats[0] ?? fromSaved ?? null;
-    if (!seat) {
-      const label = labels.find((l) => l.labelCode === targetCode);
-      if (label?.articleId) {
-        seat = {
-          labelCode: targetCode,
-          articleId: label.articleId,
-          attendeeName,
-        };
-      }
+    let seat =
+      seatsForClear().find((s) => s.labelCode === labelCode) ?? fromSaved ?? null;
+    if (!seat && label?.articleId) {
+      seat = {
+        labelCode,
+        articleId: label.articleId,
+        attendeeName: attendeeName || fromSaved?.attendeeName || "",
+      };
     }
 
     if (!seat?.articleId) {
-      setError(`${attendeeName}: 취소할 명패 정보를 찾을 수 없습니다.`);
+      setError("취소할 할당이 없습니다.");
       return;
     }
 
@@ -330,15 +303,16 @@ export function MeetingWorkspace() {
           `/api/meetings/${activeId}/clear`,
           {
             method: "POST",
-            body: JSON.stringify({ labelCode: targetCode, seats: [seat] }),
+            body: JSON.stringify({ labelCode, seats: [seat] }),
           },
         );
         setSeatPick((prev) => {
           const next = { ...prev };
-          delete next[targetCode];
+          delete next[labelCode];
           return next;
         });
-        setMessage(`${attendeeName} 할당 취소 완료. (${result.cleared}건)`);
+        const who = attendeeName || seat.attendeeName || labelCode;
+        setMessage(`${who} 할당 취소 완료. (${result.cleared}건)`);
         await loadAll();
       } catch (err) {
         setError(err instanceof Error ? err.message : "할당 취소 실패");
@@ -568,77 +542,7 @@ export function MeetingWorkspace() {
 
                 {!activeMeeting ? (
                   <p className="aims-empty-banner">회의를 먼저 선택하거나 회의설정에서 저장하세요.</p>
-                ) : attendeeOptions.length === 0 ? (
-                  <p className="aims-empty-banner">참석자명단이 없습니다. 회의설정에서 참석자를 입력하세요.</p>
-                ) : (
-                  <div className="attendee-assign-block">
-                    <div className="attendee-assign-head">
-                      <p className="attendee-assign-title">참석자별 할당</p>
-                      <button
-                        type="button"
-                        className="btn-ghost danger tiny"
-                        disabled={pending || !activeId || seatsForClear().length === 0}
-                        onClick={onCancelAll}
-                      >
-                        전체 할당 취소
-                      </button>
-                    </div>
-                    <ul className="attendee-assign-list" aria-label="참석자 명단">
-                      {attendeeOptions.map((name) => {
-                        const selectedLabel = labelCodeForAttendee(name);
-                        const selectedMeta = labels.find((l) => l.labelCode === selectedLabel);
-                        return (
-                          <li key={name}>
-                            <span className="attendee-assign-name">{name}</span>
-                            <label className="seat-combo attendee-label-pick">
-                              <span>명패</span>
-                              <select
-                                value={selectedLabel}
-                                disabled={labels.length === 0 || pending}
-                                onChange={(e) => assignAttendeeToLabel(name, e.target.value)}
-                              >
-                                <option value="">명패 선택</option>
-                                {labels.map((label) => (
-                                  <option
-                                    key={label.labelCode}
-                                    value={label.labelCode}
-                                    disabled={!label.articleId}
-                                  >
-                                    {label.articleId
-                                      ? formatArticleCell(label.articleId, label.articleName)
-                                      : `${label.labelCode} (Article 없음)`}
-                                    {seatPick[label.labelCode] &&
-                                    seatPick[label.labelCode] !== name
-                                      ? ` · ${seatPick[label.labelCode]}`
-                                      : ""}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button
-                              type="button"
-                              className="btn-navy tiny"
-                              disabled={pending || !selectedLabel || !selectedMeta?.articleId}
-                              onClick={() => onAssignOne(name)}
-                            >
-                              할당
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-ghost danger tiny"
-                              disabled={pending || !selectedLabel}
-                              onClick={() => onCancelOne(name)}
-                            >
-                              할당취소
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-
-                {!activeMeeting ? null : labels.length === 0 ? (
+                ) : labels.length === 0 ? (
                   <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
                 ) : (
                   <div className="aims-table-scroll">
@@ -673,48 +577,80 @@ export function MeetingWorkspace() {
                           </tr>
                         </thead>
                         <tbody>
-                          {labels.map((label, index) => (
-                            <tr key={label.labelCode}>
-                              <td>{index + 1}</td>
-                              <td>
-                                <p className="seat-code">{label.labelCode}</p>
-                              </td>
-                              <td>
-                                <span className={label.online ? "dot on" : "dot off"} />
-                                {label.online ? "Online" : "Offline"}
-                                {label.battery ? ` · ${label.battery}` : ""}
-                              </td>
-                              <td>
-                                {label.articleId ? (
-                                  <div>{formatArticleCell(label.articleId, label.articleName)}</div>
-                                ) : (
-                                  <span style={{ color: "var(--danger)" }}>Article 없음</span>
-                                )}
-                              </td>
-                              <td>
-                                <label className="seat-combo">
-                                  <span>참석자</span>
-                                  <select
-                                    value={seatPick[label.labelCode] ?? ""}
-                                    disabled={!label.articleId || attendeeOptions.length === 0}
-                                    onChange={(e) =>
-                                      setSeatPick((prev) => ({
-                                        ...prev,
-                                        [label.labelCode]: e.target.value,
-                                      }))
-                                    }
-                                  >
-                                    <option value="">선택</option>
-                                    {attendeeOptions.map((name) => (
-                                      <option key={name} value={name}>
-                                        {name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              </td>
-                            </tr>
-                          ))}
+                          {labels.map((label, index) => {
+                            const selectedName = seatPick[label.labelCode] ?? "";
+                            const canAssign =
+                              Boolean(label.articleId) && Boolean(selectedName) && !pending;
+                            const canCancel =
+                              Boolean(label.articleId) &&
+                              (Boolean(selectedName) ||
+                                Boolean(
+                                  activeMeeting.seats.some((s) => s.labelCode === label.labelCode),
+                                )) &&
+                              !pending;
+                            return (
+                              <tr key={label.labelCode}>
+                                <td>{index + 1}</td>
+                                <td>
+                                  <p className="seat-code">{label.labelCode}</p>
+                                </td>
+                                <td>
+                                  <span className={label.online ? "dot on" : "dot off"} />
+                                  {label.online ? "Online" : "Offline"}
+                                  {label.battery ? ` · ${label.battery}` : ""}
+                                </td>
+                                <td>
+                                  {label.articleId ? (
+                                    <div>
+                                      {formatArticleCell(label.articleId, label.articleName)}
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: "var(--danger)" }}>Article 없음</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="seat-row-actions">
+                                    <label className="seat-combo">
+                                      <span>참석자</span>
+                                      <select
+                                        value={selectedName}
+                                        disabled={!label.articleId || attendeeOptions.length === 0}
+                                        onChange={(e) =>
+                                          setSeatPick((prev) => ({
+                                            ...prev,
+                                            [label.labelCode]: e.target.value,
+                                          }))
+                                        }
+                                      >
+                                        <option value="">선택</option>
+                                        {attendeeOptions.map((name) => (
+                                          <option key={name} value={name}>
+                                            {name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      className="btn-navy tiny"
+                                      disabled={!canAssign}
+                                      onClick={() => onAssignOne(label.labelCode)}
+                                    >
+                                      할당
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-ghost danger tiny"
+                                      disabled={!canCancel}
+                                      onClick={() => onCancelOne(label.labelCode)}
+                                    >
+                                      할당취소
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
