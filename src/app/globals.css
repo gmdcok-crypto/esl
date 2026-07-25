@@ -111,24 +111,15 @@ select {
 }
 
 .seat-row-actions {
-  display: inline-flex;
-  flex-wrap: nowrap;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
-  width: max-content;
-  max-width: 100%;
+  gap: 0.4rem;
 }
 
 .seat-row-actions .seat-combo {
-  flex: 0 0 auto;
-  width: 70px;
-  min-width: 70px;
-  max-width: 70px;
-}
-
-.seat-row-actions .seat-combo select {
-  width: 100%;
-  min-width: 0;
+  flex: 1 1 8rem;
+  min-width: 7rem;
 }
 
 /* —— Landing —— */
