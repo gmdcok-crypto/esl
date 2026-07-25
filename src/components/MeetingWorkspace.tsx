@@ -190,6 +190,43 @@ export function MeetingWorkspace() {
     });
   }
 
+  async function onEnsureArticles() {
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await apiFetch<{
+          created: number;
+          skipped: number;
+          failed: number;
+          results: Array<{ labelCode: string; articleId: string; status: string; error?: string }>;
+          labels: SeatLabel[];
+        }>("/api/labels/ensure-articles", { method: "POST" });
+
+        if (result.labels) {
+          setLabels(result.labels);
+        } else {
+          await loadAll();
+        }
+
+        if (result.failed > 0) {
+          const firstFail = result.results.find((r) => r.status === "failed");
+          setError(
+            firstFail?.error
+              ? `명패 자동생성 일부 실패: ${firstFail.error}`
+              : `명패 자동생성 ${result.failed}건 실패`,
+          );
+        }
+        setMessage(
+          `명패 Article 자동생성 — 생성 ${result.created} · 유지 ${result.skipped}` +
+            (result.failed ? ` · 실패 ${result.failed}` : ""),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "명패 자동생성 실패");
+      }
+    });
+  }
+
   async function onPush() {
     if (!activeId) return;
     setError(null);
@@ -264,7 +301,7 @@ export function MeetingWorkspace() {
               />
             </label>
             <label>
-              <span>참석자 명단 (콤보용)</span>
+              <span>참석자명단 (쉼표(,)로구분)</span>
               <textarea
                 value={form.attendees}
                 onChange={(e) => setForm((f) => ({ ...f, attendees: e.target.value }))}
@@ -312,55 +349,86 @@ export function MeetingWorkspace() {
           <div className="board-head">
             <div>
               <h2 id="board-title">등록된 명패</h2>
-              <p className="panel-lead tight">명패마다 참석자를 콤보에서 선택합니다.</p>
+              <p className="panel-lead tight">
+                Article이 없으면 「명패 자동생성」으로 명패1, 명패2…를 만들고 연결합니다.
+              </p>
             </div>
             <span className="count">{labels.length}</span>
           </div>
 
           {!activeMeeting ? (
-            <p className="empty">왼쪽에서 회의를 먼저 저장하세요.</p>
-          ) : labels.length === 0 ? (
+            <p className="empty">참석자 배정은 왼쪽에서 회의를 저장한 뒤 가능합니다. Article이 없으면 아래에서 자동생성하세요.</p>
+          ) : null}
+
+          {labels.length === 0 ? (
             <p className="empty">AIMS에 등록된 명패가 없습니다.</p>
           ) : (
-            <ul className="seat-list">
-              {labels.map((label) => (
-                <li key={label.labelCode} className="seat-row">
-                  <div className="seat-info">
-                    <p className="seat-code">{label.labelCode}</p>
-                    <p className="seat-meta">
-                      <span className={label.online ? "dot on" : "dot off"} />
-                      {label.online ? "Online" : "Offline"}
-                      {label.articleId ? ` · Article ${label.articleId}` : " · Article 없음"}
-                      {label.battery ? ` · ${label.battery}` : ""}
-                    </p>
-                    {label.articleName ? <p className="seat-article">{label.articleName}</p> : null}
-                  </div>
-
-                  <label className="seat-combo">
-                    <span>참석자</span>
-                    <select
-                      value={seatPick[label.labelCode] ?? ""}
-                      disabled={!label.articleId || attendeeOptions.length === 0}
-                      onChange={(e) =>
-                        setSeatPick((prev) => ({ ...prev, [label.labelCode]: e.target.value }))
-                      }
-                    >
-                      <option value="">선택</option>
-                      {attendeeOptions.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </li>
-              ))}
-            </ul>
+            <div className="seat-table-wrap">
+              <table className="seat-table" aria-label="등록된 명패 목록">
+                <thead>
+                  <tr>
+                    <th style={{ width: "18rem" }}>명패</th>
+                    <th style={{ width: "10rem" }}>상태</th>
+                    <th>Article</th>
+                    <th style={{ width: "16rem" }}>참석자 선택</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {labels.map((label) => (
+                    <tr key={label.labelCode}>
+                      <td>
+                        <p className="seat-code">{label.labelCode}</p>
+                      </td>
+                      <td>
+                        <p className="seat-meta">
+                          <span className={label.online ? "dot on" : "dot off"} />
+                          {label.online ? "Online" : "Offline"}
+                          {label.battery ? ` · ${label.battery}` : ""}
+                        </p>
+                      </td>
+                      <td>
+                        <p className="seat-meta">
+                          {label.articleId ? `Article ${label.articleId}` : "Article 없음"}
+                        </p>
+                        {label.articleName ? <p className="seat-article">{label.articleName}</p> : null}
+                      </td>
+                      <td>
+                        <label className="seat-combo">
+                          <span>참석자</span>
+                          <select
+                            value={seatPick[label.labelCode] ?? ""}
+                            disabled={!activeMeeting || !label.articleId || attendeeOptions.length === 0}
+                            onChange={(e) =>
+                              setSeatPick((prev) => ({ ...prev, [label.labelCode]: e.target.value }))
+                            }
+                          >
+                            <option value="">선택</option>
+                            {attendeeOptions.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <div className="compose-actions seat-actions">
             <button type="button" className="btn-ghost" onClick={() => startTransition(() => loadAll())} disabled={pending}>
               명패 새로고침
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={onEnsureArticles}
+              disabled={pending || labels.length === 0}
+            >
+              명패 자동생성
             </button>
             <button type="button" className="btn-ghost" onClick={onSaveSeats} disabled={pending || !activeId}>
               배정 저장

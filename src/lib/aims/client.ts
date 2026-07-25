@@ -2,7 +2,6 @@ import { getAimsApiBaseUrl, getEnv } from "@/lib/config";
 import { getAimsAccessToken, invalidateAimsAccessToken } from "@/lib/aims/auth";
 import type {
   AimsApiError,
-  AimsLabel,
   AimsListResponse,
   AimsProduct,
   AimsStore,
@@ -207,10 +206,11 @@ export class AimsClient {
     return this.request("/common/labels");
   }
 
-  async assignLabel(payload: AssignLabelPayload): Promise<AimsLabel> {
-    return this.request<AimsLabel>("/common/labels/link", {
+  async assignLabel(payload: AssignLabelPayload | AssignLabelPayload[]): Promise<unknown> {
+    const body = Array.isArray(payload) ? payload : [payload];
+    return this.request("/common/labels/link", {
       method: "POST",
-      body: payload,
+      body,
     });
   }
 

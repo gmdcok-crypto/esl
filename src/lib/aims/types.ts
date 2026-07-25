@@ -56,8 +56,10 @@ export interface UpdateProductPayload {
   stock?: number;
 }
 
+/** AIMS SaaS POST /common/labels/link body item */
 export interface AssignLabelPayload {
-  labelId: string;
-  productId: string;
-  templateId?: string;
+  labelCode: string;
+  articleId: string;
+  articleName?: string;
+  templateName?: string;
 }
