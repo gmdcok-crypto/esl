@@ -193,23 +193,46 @@ export function MeetingWorkspace() {
     });
   }
 
-  async function persistSeats(): Promise<number> {
-    if (!activeId) {
-      throw new Error("먼저 회의를 저장하세요.");
-    }
-    const seats: SeatAssignment[] = labels
+  function currentSeatAssignments(): SeatAssignment[] {
+    return labels
       .filter((label) => seatPick[label.labelCode] && label.articleId)
       .map((label) => ({
         labelCode: label.labelCode,
         articleId: label.articleId,
         attendeeName: seatPick[label.labelCode],
       }));
+  }
+
+  async function persistSeats(seats = currentSeatAssignments()): Promise<number> {
+    if (!activeId) {
+      throw new Error("먼저 회의를 저장하세요.");
+    }
 
     await apiFetch(`/api/meetings/${activeId}`, {
       method: "PUT",
       body: JSON.stringify({ seats }),
     });
     return seats.length;
+  }
+
+  function labelCodeForAttendee(attendeeName: string): string {
+    const found = Object.entries(seatPick).find(([, name]) => name === attendeeName);
+    return found?.[0] ?? "";
+  }
+
+  function assignAttendeeToLabel(attendeeName: string, labelCode: string) {
+    setSeatPick((prev) => {
+      const next: Record<string, string> = {};
+      for (const [code, name] of Object.entries(prev)) {
+        if (name !== attendeeName && code !== labelCode) {
+          next[code] = name;
+        }
+      }
+      if (labelCode) {
+        next[labelCode] = attendeeName;
+      }
+      return next;
+    });
   }
 
   async function onPush() {
@@ -221,11 +244,136 @@ export function MeetingWorkspace() {
         await persistSeats();
         const result = await apiFetch<{ pushed: number }>(`/api/meetings/${activeId}/push`, {
           method: "POST",
+          body: JSON.stringify({}),
         });
         setMessage(`전자명패 ${result.pushed}장 전송 완료.`);
         await loadAll();
       } catch (err) {
         setError(err instanceof Error ? err.message : "전송 실패");
+        await loadAll();
+      }
+    });
+  }
+
+  async function onAssignOne(attendeeName: string) {
+    if (!activeId) return;
+    const labelCode = labelCodeForAttendee(attendeeName);
+    if (!labelCode) {
+      setError(`${attendeeName}: 할당할 명패를 먼저 선택하세요.`);
+      return;
+    }
+    const label = labels.find((l) => l.labelCode === labelCode);
+    if (!label?.articleId) {
+      setError(`${attendeeName}: 선택한 명패에 Article이 없습니다.`);
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        await persistSeats();
+        await apiFetch<{ pushed: number }>(`/api/meetings/${activeId}/push`, {
+          method: "POST",
+          body: JSON.stringify({ labelCode }),
+        });
+        setMessage(
+          `${attendeeName} → ${formatArticleCell(label.articleId, label.articleName)} 할당 완료.`,
+        );
+        await loadAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "할당 실패");
+        await loadAll();
+      }
+    });
+  }
+
+  function seatsForClear(): SeatAssignment[] {
+    const fromPick = currentSeatAssignments();
+    if (fromPick.length > 0) return fromPick;
+    return activeMeeting?.seats.filter((s) => s.articleId && s.attendeeName) ?? [];
+  }
+
+  async function onCancelOne(attendeeName: string) {
+    if (!activeId) return;
+    const labelCode = labelCodeForAttendee(attendeeName);
+    const fromSaved = activeMeeting?.seats.find((s) => s.attendeeName === attendeeName);
+    const targetCode = labelCode || fromSaved?.labelCode || "";
+    if (!targetCode) {
+      setError(`${attendeeName}: 취소할 할당이 없습니다.`);
+      return;
+    }
+
+    const seats = seatsForClear().filter((s) => s.labelCode === targetCode);
+    let seat = seats[0] ?? fromSaved ?? null;
+    if (!seat) {
+      const label = labels.find((l) => l.labelCode === targetCode);
+      if (label?.articleId) {
+        seat = {
+          labelCode: targetCode,
+          articleId: label.articleId,
+          attendeeName,
+        };
+      }
+    }
+
+    if (!seat?.articleId) {
+      setError(`${attendeeName}: 취소할 명패 정보를 찾을 수 없습니다.`);
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await apiFetch<{ cleared: number }>(
+          `/api/meetings/${activeId}/clear`,
+          {
+            method: "POST",
+            body: JSON.stringify({ labelCode: targetCode, seats: [seat] }),
+          },
+        );
+        setSeatPick((prev) => {
+          const next = { ...prev };
+          delete next[targetCode];
+          return next;
+        });
+        setMessage(`${attendeeName} 할당 취소 완료. (${result.cleared}건)`);
+        await loadAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "할당 취소 실패");
+        await loadAll();
+      }
+    });
+  }
+
+  async function onCancelAll() {
+    if (!activeId) return;
+    const seats = seatsForClear();
+    if (seats.length === 0) {
+      setError("취소할 할당이 없습니다.");
+      return;
+    }
+    if (!window.confirm(`배정된 명패 ${seats.length}건의 할당을 모두 취소할까요?`)) {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await apiFetch<{ cleared: number }>(
+          `/api/meetings/${activeId}/clear`,
+          {
+            method: "POST",
+            body: JSON.stringify({ seats }),
+          },
+        );
+        setSeatPick({});
+        setMessage(`전체 할당 취소 완료. (${result.cleared}건)`);
+        await loadAll();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "전체 할당 취소 실패");
         await loadAll();
       }
     });
@@ -420,7 +568,77 @@ export function MeetingWorkspace() {
 
                 {!activeMeeting ? (
                   <p className="aims-empty-banner">회의를 먼저 선택하거나 회의설정에서 저장하세요.</p>
-                ) : labels.length === 0 ? (
+                ) : attendeeOptions.length === 0 ? (
+                  <p className="aims-empty-banner">참석자명단이 없습니다. 회의설정에서 참석자를 입력하세요.</p>
+                ) : (
+                  <div className="attendee-assign-block">
+                    <div className="attendee-assign-head">
+                      <p className="attendee-assign-title">참석자별 할당</p>
+                      <button
+                        type="button"
+                        className="btn-ghost danger tiny"
+                        disabled={pending || !activeId || seatsForClear().length === 0}
+                        onClick={onCancelAll}
+                      >
+                        전체 할당 취소
+                      </button>
+                    </div>
+                    <ul className="attendee-assign-list" aria-label="참석자 명단">
+                      {attendeeOptions.map((name) => {
+                        const selectedLabel = labelCodeForAttendee(name);
+                        const selectedMeta = labels.find((l) => l.labelCode === selectedLabel);
+                        return (
+                          <li key={name}>
+                            <span className="attendee-assign-name">{name}</span>
+                            <label className="seat-combo attendee-label-pick">
+                              <span>명패</span>
+                              <select
+                                value={selectedLabel}
+                                disabled={labels.length === 0 || pending}
+                                onChange={(e) => assignAttendeeToLabel(name, e.target.value)}
+                              >
+                                <option value="">명패 선택</option>
+                                {labels.map((label) => (
+                                  <option
+                                    key={label.labelCode}
+                                    value={label.labelCode}
+                                    disabled={!label.articleId}
+                                  >
+                                    {label.articleId
+                                      ? formatArticleCell(label.articleId, label.articleName)
+                                      : `${label.labelCode} (Article 없음)`}
+                                    {seatPick[label.labelCode] &&
+                                    seatPick[label.labelCode] !== name
+                                      ? ` · ${seatPick[label.labelCode]}`
+                                      : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              className="btn-navy tiny"
+                              disabled={pending || !selectedLabel || !selectedMeta?.articleId}
+                              onClick={() => onAssignOne(name)}
+                            >
+                              할당
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-ghost danger tiny"
+                              disabled={pending || !selectedLabel}
+                              onClick={() => onCancelOne(name)}
+                            >
+                              할당취소
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {!activeMeeting ? null : labels.length === 0 ? (
                   <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
                 ) : (
                   <div className="aims-table-scroll">
@@ -519,6 +737,14 @@ export function MeetingWorkspace() {
                     disabled={pending || !activeId}
                   >
                     ESL 일괄 전송
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost danger"
+                    onClick={onCancelAll}
+                    disabled={pending || !activeId || seatsForClear().length === 0}
+                  >
+                    전체 할당 취소
                   </button>
                 </div>
               </>
