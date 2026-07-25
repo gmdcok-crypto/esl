@@ -322,6 +322,11 @@ select {
   overflow-y: auto;
 }
 
+.aims-sidebar-foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.4rem 0;
+}
+
 .aims-menu-group {
   margin-bottom: 0.25rem;
 }

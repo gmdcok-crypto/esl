@@ -270,26 +270,14 @@ export function MeetingWorkspace() {
             </ul>
           </div>
         </nav>
+        <div className="aims-sidebar-foot">
+          <button type="button" className="aims-menu-item" onClick={logout}>
+            로그아웃
+          </button>
+        </div>
       </aside>
 
       <div className="aims-main">
-        <header className="aims-topbar">
-          <div className="aims-store-search" aria-hidden>
-            <span>⌕</span>
-            <span>매장을 선택하세요</span>
-          </div>
-          <p className="aims-store-path">BLU · 전자명패 운영</p>
-          <div className="aims-top-actions">
-            <span style={{ color: "var(--muted)", fontSize: "0.84rem" }}>한국어</span>
-            <button type="button" className="btn-ghost tiny" onClick={logout}>
-              로그아웃
-            </button>
-            <span className="aims-avatar" aria-hidden>
-              M
-            </span>
-          </div>
-        </header>
-
         <div className="aims-content">
           <h1 className="aims-page-title">
             <span aria-hidden>▦</span>
