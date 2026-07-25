@@ -242,58 +242,34 @@ export function MeetingWorkspace() {
     <div className="aims-shell">
       <aside className="aims-sidebar" aria-label="주 메뉴">
         <div className="aims-logo">명패 SaaS</div>
-        <div className="aims-nav">
-          <div className="aims-rail" aria-hidden>
-            <span>ESL</span>
-            <span>CONFIG</span>
+        <nav className="aims-menu">
+          <div className="aims-menu-group">
+            <div className="aims-menu-title">
+              Label
+              <span className="chev">▾</span>
+            </div>
+            <ul className="aims-submenu">
+              <li>
+                <button
+                  type="button"
+                  className={`aims-menu-item ${tab === "meeting" ? "active" : ""}`}
+                  onClick={() => setTab("meeting")}
+                >
+                  회의 설정
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className={`aims-menu-item ${tab === "assign" ? "active" : ""}`}
+                  onClick={() => setTab("assign")}
+                >
+                  명패 배정
+                </button>
+              </li>
+            </ul>
           </div>
-          <nav className="aims-menu">
-            <div className="aims-menu-group">
-              <div className="aims-menu-title">
-                Label
-                <span className="chev">▾</span>
-              </div>
-              <ul className="aims-submenu">
-                <li>
-                  <button
-                    type="button"
-                    className={`aims-menu-item ${tab === "meeting" ? "active" : ""}`}
-                    onClick={() => setTab("meeting")}
-                  >
-                    회의 설정
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    className={`aims-menu-item ${tab === "assign" ? "active" : ""}`}
-                    onClick={() => setTab("assign")}
-                  >
-                    명패 배정
-                  </button>
-                </li>
-              </ul>
-            </div>
-            <div className="aims-menu-group">
-              <div className="aims-menu-title">
-                상품
-                <span className="chev">▾</span>
-              </div>
-            </div>
-            <div className="aims-menu-group">
-              <div className="aims-menu-title">
-                Gateway
-                <span className="chev">▾</span>
-              </div>
-            </div>
-            <div className="aims-menu-group">
-              <div className="aims-menu-title">
-                Template
-                <span className="chev">▾</span>
-              </div>
-            </div>
-          </nav>
-        </div>
+        </nav>
       </aside>
 
       <div className="aims-main">

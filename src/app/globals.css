@@ -316,25 +316,6 @@ select {
   min-height: 0;
 }
 
-.aims-rail {
-  width: 28px;
-  background: var(--navy-deep);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.85rem 0;
-  gap: 1.4rem;
-}
-
-.aims-rail span {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 700;
-}
-
 .aims-menu {
   flex: 1;
   padding: 0.55rem 0;
@@ -669,18 +650,11 @@ select {
     min-height: auto;
   }
 
-  .aims-rail {
-    display: none;
-  }
-
-  .aims-nav {
-    overflow-x: auto;
-  }
-
   .aims-menu {
     display: flex;
     gap: 0.25rem;
     padding: 0.4rem;
+    overflow-x: auto;
   }
 
   .aims-menu-group {
