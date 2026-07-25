@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, clearStoredToken, getStoredToken } from "@/lib/client-api";
 
@@ -70,6 +70,14 @@ export function MeetingWorkspace() {
   const [pending, startTransition] = useTransition();
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<MainTab>("meeting");
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+
+  function scrollTable(direction: "left" | "right") {
+    tableWrapRef.current?.scrollBy({
+      left: direction === "left" ? -180 : 180,
+      behavior: "smooth",
+    });
+  }
 
   const activeMeeting = useMemo(
     () => meetings.find((m) => m.id === activeId) ?? null,
@@ -416,62 +424,83 @@ export function MeetingWorkspace() {
                 ) : labels.length === 0 ? (
                   <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
                 ) : (
-                  <div className="aims-table-wrap">
-                    <table className="aims-table" aria-label="등록된 명패 목록">
-                      <thead>
-                        <tr>
-                          <th style={{ width: "3rem" }}>#</th>
-                          <th>LABEL CODE</th>
-                          <th>STATUS</th>
-                          <th>ARTICLE</th>
-                          <th>참석자</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {labels.map((label, index) => (
-                          <tr key={label.labelCode}>
-                            <td>{index + 1}</td>
-                            <td>
-                              <p className="seat-code">{label.labelCode}</p>
-                            </td>
-                            <td>
-                              <span className={label.online ? "dot on" : "dot off"} />
-                              {label.online ? "Online" : "Offline"}
-                              {label.battery ? ` · ${label.battery}` : ""}
-                            </td>
-                            <td>
-                              {label.articleId ? (
-                                <div>{formatArticleCell(label.articleId, label.articleName)}</div>
-                              ) : (
-                                <span style={{ color: "var(--danger)" }}>Article 없음</span>
-                              )}
-                            </td>
-                            <td>
-                              <label className="seat-combo">
-                                <span>참석자</span>
-                                <select
-                                  value={seatPick[label.labelCode] ?? ""}
-                                  disabled={!label.articleId || attendeeOptions.length === 0}
-                                  onChange={(e) =>
-                                    setSeatPick((prev) => ({
-                                      ...prev,
-                                      [label.labelCode]: e.target.value,
-                                    }))
-                                  }
-                                >
-                                  <option value="">선택</option>
-                                  {attendeeOptions.map((name) => (
-                                    <option key={name} value={name}>
-                                      {name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </td>
+                  <div className="aims-table-scroll">
+                    <div className="aims-table-scroll-hint">
+                      <button
+                        type="button"
+                        className="aims-scroll-arrow left"
+                        aria-label="왼쪽으로 스크롤"
+                        onClick={() => scrollTable("left")}
+                      >
+                        ‹
+                      </button>
+                      <span>좌우로 스크롤하세요</span>
+                      <button
+                        type="button"
+                        className="aims-scroll-arrow right"
+                        aria-label="오른쪽으로 스크롤"
+                        onClick={() => scrollTable("right")}
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <div className="aims-table-wrap" ref={tableWrapRef}>
+                      <table className="aims-table" aria-label="등록된 명패 목록">
+                        <thead>
+                          <tr>
+                            <th style={{ width: "3rem" }}>#</th>
+                            <th>LABEL CODE</th>
+                            <th>STATUS</th>
+                            <th>ARTICLE</th>
+                            <th>참석자</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {labels.map((label, index) => (
+                            <tr key={label.labelCode}>
+                              <td>{index + 1}</td>
+                              <td>
+                                <p className="seat-code">{label.labelCode}</p>
+                              </td>
+                              <td>
+                                <span className={label.online ? "dot on" : "dot off"} />
+                                {label.online ? "Online" : "Offline"}
+                                {label.battery ? ` · ${label.battery}` : ""}
+                              </td>
+                              <td>
+                                {label.articleId ? (
+                                  <div>{formatArticleCell(label.articleId, label.articleName)}</div>
+                                ) : (
+                                  <span style={{ color: "var(--danger)" }}>Article 없음</span>
+                                )}
+                              </td>
+                              <td>
+                                <label className="seat-combo">
+                                  <span>참석자</span>
+                                  <select
+                                    value={seatPick[label.labelCode] ?? ""}
+                                    disabled={!label.articleId || attendeeOptions.length === 0}
+                                    onChange={(e) =>
+                                      setSeatPick((prev) => ({
+                                        ...prev,
+                                        [label.labelCode]: e.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">선택</option>
+                                    {attendeeOptions.map((name) => (
+                                      <option key={name} value={name}>
+                                        {name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
 
