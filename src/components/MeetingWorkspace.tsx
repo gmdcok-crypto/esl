@@ -40,6 +40,15 @@ const emptyForm = {
   attendees: "",
 };
 
+/** 명패2 → "2(명패2)" */
+function formatArticleCell(articleId: string): string {
+  const match = articleId.trim().match(/^명패(\d+)$/);
+  if (match) {
+    return `${match[1]}(${articleId.trim()})`;
+  }
+  return articleId;
+}
+
 export function MeetingWorkspace() {
   const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -51,7 +60,7 @@ export function MeetingWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<MainTab>("assign");
+  const [tab, setTab] = useState<MainTab>("meeting");
 
   const activeMeeting = useMemo(
     () => meetings.find((m) => m.id === activeId) ?? null,
@@ -241,11 +250,11 @@ export function MeetingWorkspace() {
   return (
     <div className="aims-shell">
       <aside className="aims-sidebar" aria-label="주 메뉴">
-        <div className="aims-logo">명패 SaaS</div>
+        <div className="aims-logo">전자명패</div>
         <nav className="aims-menu">
           <div className="aims-menu-group">
             <div className="aims-menu-title">
-              Label
+              명패 설정& 배정
               <span className="chev">▾</span>
             </div>
             <ul className="aims-submenu">
@@ -255,7 +264,7 @@ export function MeetingWorkspace() {
                   className={`aims-menu-item ${tab === "meeting" ? "active" : ""}`}
                   onClick={() => setTab("meeting")}
                 >
-                  회의 설정
+                  회의설정
                 </button>
               </li>
               <li>
@@ -264,7 +273,7 @@ export function MeetingWorkspace() {
                   className={`aims-menu-item ${tab === "assign" ? "active" : ""}`}
                   onClick={() => setTab("assign")}
                 >
-                  명패 배정
+                  태그할당
                 </button>
               </li>
             </ul>
@@ -288,20 +297,20 @@ export function MeetingWorkspace() {
             <button
               type="button"
               role="tab"
-              aria-selected={tab === "assign"}
-              className={`aims-tab ${tab === "assign" ? "active" : ""}`}
-              onClick={() => setTab("assign")}
-            >
-              LABEL ASSIGN
-            </button>
-            <button
-              type="button"
-              role="tab"
               aria-selected={tab === "meeting"}
               className={`aims-tab ${tab === "meeting" ? "active" : ""}`}
               onClick={() => setTab("meeting")}
             >
-              MEETING SETUP
+              회의설정
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "assign"}
+              className={`aims-tab ${tab === "assign" ? "active" : ""}`}
+              onClick={() => setTab("assign")}
+            >
+              태그할당
             </button>
           </div>
 
@@ -452,7 +461,7 @@ export function MeetingWorkspace() {
                 </div>
 
                 {!activeMeeting ? (
-                  <p className="aims-empty-banner">회의를 먼저 선택하거나 MEETING SETUP에서 저장하세요.</p>
+                  <p className="aims-empty-banner">회의를 먼저 선택하거나 회의설정에서 저장하세요.</p>
                 ) : labels.length === 0 ? (
                   <p className="aims-empty-banner">사용 가능한 데이터 없음</p>
                 ) : (
@@ -482,12 +491,7 @@ export function MeetingWorkspace() {
                             </td>
                             <td>
                               {label.articleId ? (
-                                <>
-                                  <div>{label.articleId}</div>
-                                  {label.articleName ? (
-                                    <p className="seat-article">{label.articleName}</p>
-                                  ) : null}
-                                </>
+                                <div>{formatArticleCell(label.articleId)}</div>
                               ) : (
                                 <span style={{ color: "var(--danger)" }}>Article 없음</span>
                               )}
