@@ -1,5 +1,13 @@
-const CACHE = "myeongpae-v1";
-const ASSETS = ["/", "/login", "/app", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE = "myeongpae-v2";
+const ASSETS = [
+  "/",
+  "/login",
+  "/app",
+  "/manifest.webmanifest",
+  "/icons/icon.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

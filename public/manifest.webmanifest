@@ -3,16 +3,36 @@
   "short_name": "명패",
   "description": "회의명·참석자·주관기관을 전자명패로 전송",
   "start_url": "/app",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0c1412",
-  "theme_color": "#0c1412",
+  "orientation": "any",
+  "background_color": "#0b1b33",
+  "theme_color": "#0b1b33",
   "lang": "ko",
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

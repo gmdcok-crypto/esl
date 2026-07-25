@@ -709,6 +709,72 @@ select {
   justify-content: flex-end;
 }
 
+.install-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: end center;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  background: rgba(11, 27, 51, 0.45);
+}
+
+.install-dialog {
+  width: min(100%, 380px);
+  margin-bottom: 0.5rem;
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(11, 27, 51, 0.22);
+  text-align: center;
+}
+
+.install-icon {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.65rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1b33;
+}
+
+.install-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.install-dialog h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.05rem;
+  color: var(--navy);
+}
+
+.install-dialog p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.install-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  justify-content: center;
+}
+
+.install-actions .btn-navy,
+.install-actions .btn-ghost {
+  min-width: 6.5rem;
+}
+
 @media (max-width: 900px) {
   .aims-shell {
     grid-template-columns: 1fr;

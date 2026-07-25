@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Noto_Sans_KR } from "next/font/google";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -24,8 +25,12 @@ export const metadata: Metadata = {
     title: "명패",
   },
   icons: {
-    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/icon.svg" }],
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
   },
 };
 
@@ -45,6 +50,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className={`${manrope.variable} ${notoSansKr.variable}`}>
         {children}
+        <InstallPrompt />
         <script
           dangerouslySetInnerHTML={{
             __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}`,
